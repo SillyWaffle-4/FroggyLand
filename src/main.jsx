@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Eye, EyeOff, Hammer, Map, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Car, Eye, EyeOff, Hammer, Map, Play, RotateCcw, Sparkles, Trees, Volume2, VolumeX, Waves } from "lucide-react";
 import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
@@ -187,9 +187,18 @@ function ModeMenu({ onSelect }) {
     <section className="mode-menu" aria-label="Choose game mode">
       <div className="menu-art" aria-hidden="true">
         <div className="menu-sun" />
+        <div className="menu-cloud cloud-a" />
+        <div className="menu-cloud cloud-b" />
         <div className="menu-ridge ridge-a" />
         <div className="menu-ridge ridge-b" />
+        <div className="menu-city">
+          <span />
+          <span />
+          <span />
+        </div>
         <div className="menu-road" />
+        <div className="menu-car car-a" />
+        <div className="menu-car car-b" />
         <div className="menu-pond" />
         <div className="menu-frog">
           <span />
@@ -198,16 +207,23 @@ function ModeMenu({ onSelect }) {
       <div className="menu-copy">
         <div className="menu-kicker">
           <Sparkles size={18} />
-          Top-down exploration, parkour houses, shops, pickaxes, and big rewards
+          Open-map pond adventure
         </div>
         <h1>FroggyLand</h1>
-        <p>Explore a huge pond map, build checkpoints, enter parkour houses, survive daytime birds, and unlock platformer rooms through the world.</p>
+        <p>Explore pondland, cross city roads, hide from daytime birds, build checkpoints, and find parkour houses with rewards inside.</p>
+        <div className="menu-feature-row" aria-label="Game features">
+          <span><Map size={16} />300k map</span>
+          <span><Car size={16} />city traffic</span>
+          <span><Trees size={16} />urban parks</span>
+          <span><Waves size={16} />safe water</span>
+        </div>
       </div>
       <div className="mode-card-grid">
         <button className="mode-card topdown-card" type="button" onClick={() => onSelect("topdown")}>
-          <span className="mode-icon"><Hammer size={28} /></span>
-          <strong>Play FroggyLand</strong>
-          <span>Start in top-down pondland, then find parkour houses and Market Hall platformer rooms inside the map.</span>
+          <span className="mode-icon"><Play size={28} /></span>
+          <strong>Start Exploring</strong>
+          <span>Top-down pondland begins near the city, with shops, parkour houses, lily leaps, pickaxes, and traffic hazards.</span>
+          <span className="mode-card-action">Play now <Hammer size={16} /></span>
         </button>
       </div>
     </section>

@@ -134,9 +134,8 @@ button {
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 76% 18%, rgba(255, 216, 106, 0.36), transparent 25%),
-    linear-gradient(135deg, rgba(28, 86, 76, 0.9), rgba(39, 116, 69, 0.84) 42%, rgba(177, 116, 58, 0.76)),
-    #164d3f;
+    radial-gradient(circle at 18% 14%, rgba(255, 226, 133, 0.34), transparent 24%),
+    linear-gradient(135deg, #164d3f 0%, #286e58 36%, #7a985b 64%, #b7794f 100%);
 }
 
 .mode-menu {
@@ -151,10 +150,8 @@ button {
   padding: 28px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(244, 252, 236, 0.54)),
-    rgba(239, 250, 228, 0.7);
-  box-shadow: 0 30px 90px rgba(15, 40, 31, 0.34);
+  background: rgba(239, 250, 228, 0.76);
+  box-shadow: 0 30px 90px rgba(15, 40, 31, 0.38);
   overflow: hidden;
 }
 
@@ -163,7 +160,7 @@ button {
   inset: 0;
   overflow: hidden;
   background:
-    linear-gradient(180deg, #92daf0 0%, #bde7cb 48%, #73b567 49%, #428a50 100%);
+    linear-gradient(180deg, #92daf0 0%, #c7efd6 46%, #78be65 47%, #438b51 100%);
 }
 
 .menu-sun {
@@ -175,6 +172,27 @@ button {
   border-radius: 50%;
   background: #ffd86a;
   box-shadow: 0 0 0 18px rgba(255, 216, 106, 0.22), 0 0 70px rgba(255, 216, 106, 0.5);
+}
+
+.menu-cloud {
+  position: absolute;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 24px -10px 0 rgba(255, 255, 255, 0.78), 52px 2px 0 rgba(255, 255, 255, 0.7);
+}
+
+.cloud-a {
+  width: 118px;
+  left: 88px;
+  top: 86px;
+}
+
+.cloud-b {
+  width: 96px;
+  right: 318px;
+  top: 148px;
+  opacity: 0.76;
 }
 
 .menu-ridge {
@@ -196,6 +214,40 @@ button {
   transform: scaleX(1.08);
 }
 
+.menu-city {
+  position: absolute;
+  right: 100px;
+  bottom: 246px;
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+
+.menu-city span {
+  width: 72px;
+  height: 150px;
+  border-radius: 8px 8px 0 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 17px, rgba(255, 232, 150, 0.78) 17px 27px),
+    #667780;
+  box-shadow: inset 0 10px 0 rgba(255, 255, 255, 0.12);
+}
+
+.menu-city span:nth-child(2) {
+  height: 198px;
+  width: 84px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 232, 150, 0.7) 18px 29px),
+    #7b7870;
+}
+
+.menu-city span:nth-child(3) {
+  height: 128px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 17px, rgba(255, 232, 150, 0.7) 17px 27px),
+    #5f7782;
+}
+
 .menu-road {
   position: absolute;
   right: -8%;
@@ -215,6 +267,59 @@ button {
   height: 250px;
   background: repeating-linear-gradient(180deg, #ffe36f 0 34px, transparent 34px 64px);
   transform: rotate(-7deg);
+}
+
+.menu-car {
+  position: absolute;
+  right: 86px;
+  bottom: 96px;
+  width: 70px;
+  height: 34px;
+  border-radius: 9px;
+  background: #e65b4f;
+  box-shadow: 0 10px 0 rgba(18, 33, 28, 0.22);
+  animation: menu-car-drive 4.8s linear infinite;
+}
+
+.menu-car::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 5px;
+  width: 32px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(222, 246, 255, 0.82);
+}
+
+.menu-car::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  bottom: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #17231d;
+  box-shadow: 44px 0 0 #17231d;
+}
+
+.car-b {
+  right: 256px;
+  bottom: 182px;
+  width: 86px;
+  background: #f0b93f;
+  animation-duration: 6.2s;
+  animation-delay: -2s;
+}
+
+@keyframes menu-car-drive {
+  from {
+    transform: translate(120px, 34px) rotate(-8deg);
+  }
+  to {
+    transform: translate(-250px, -68px) rotate(-8deg);
+  }
 }
 
 .menu-pond {
@@ -313,6 +418,28 @@ button {
   font-weight: 700;
 }
 
+.menu-feature-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 560px;
+  margin-top: 18px;
+}
+
+.menu-feature-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(20, 55, 35, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #173820;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
 .mode-card-grid {
   display: grid;
   gap: 12px;
@@ -320,25 +447,27 @@ button {
 }
 
 .mode-card {
-  min-height: 172px;
+  min-height: 218px;
   display: grid;
   justify-items: start;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid rgba(22, 53, 36, 0.2);
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid rgba(22, 53, 36, 0.16);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.86);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 252, 230, 0.9));
   color: #173820;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 16px 34px rgba(24, 70, 50, 0.18);
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  box-shadow: 0 22px 46px rgba(24, 70, 50, 0.24);
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .mode-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
   border-color: rgba(255, 216, 106, 0.78);
   background: #ffffff;
+  box-shadow: 0 28px 58px rgba(24, 70, 50, 0.3);
 }
 
 .mode-icon {
@@ -361,11 +490,25 @@ button {
   line-height: 1.05;
 }
 
-.mode-card > span:last-child {
+.mode-card > span:not(.mode-icon):not(.mode-card-action) {
   color: #52675b;
   font-size: 0.95rem;
   font-weight: 650;
   line-height: 1.35;
+}
+
+.mode-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: end;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffdf5d;
+  color: #173820;
+  font-size: 0.94rem;
+  font-weight: 900;
+  box-shadow: inset 0 -2px 0 rgba(20, 55, 35, 0.16);
 }
 
 .game-layout {

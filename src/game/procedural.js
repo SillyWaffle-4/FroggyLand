@@ -65,6 +65,11 @@ function chooseWallMaterial(next) {
   return "clay";
 }
 
+function chooseCityColor(next) {
+  const colors = ["#667780", "#7b7870", "#5f7782", "#748189", "#697982"];
+  return colors[Math.floor(next() * colors.length)];
+}
+
 function mergeRects(rects, margin = 18) {
   const merged = rects.map((rect) => ({ ...rect }));
   let changed = true;
@@ -115,6 +120,10 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   }
 
   const next = rand(seed ^ (chunkX * 73856093) ^ (chunkY * 19349663));
+  if (next() > 0.94) {
+    return generateUrbanChunk(chunkX, chunkY, next);
+  }
+
   const walls = [];
   const water = [];
   const lilyPads = [];
@@ -238,4 +247,114 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     structures,
     pickups,
   };
+}
+
+function generateUrbanChunk(chunkX, chunkY, next) {
+  const baseX = chunkX * TOP_DOWN_CHUNK_SIZE;
+  const baseY = chunkY * TOP_DOWN_CHUNK_SIZE;
+  const districtX = baseX + 110 + Math.floor(next() * 120);
+  const districtY = baseY + 110 + Math.floor(next() * 120);
+  const districtW = 880 + Math.floor(next() * 140);
+  const districtH = 820 + Math.floor(next() * 150);
+  const cx = districtX + districtW / 2;
+  const cy = districtY + districtH / 2;
+  const park = {
+    id: `urban-park-${chunkX}-${chunkY}`,
+    x: districtX + 70 + Math.floor(next() * 90),
+    y: districtY + districtH - 270,
+    w: 250 + Math.floor(next() * 120),
+    h: 150 + Math.floor(next() * 70),
+  };
+  const roads = [
+    { id: `urban-road-h-${chunkX}-${chunkY}`, x: districtX + 40, y: cy - 48, w: districtW - 80, h: 96 },
+    { id: `urban-road-v-${chunkX}-${chunkY}`, x: cx - 50, y: districtY + 40, w: 100, h: districtH - 80 },
+  ];
+  if (next() > 0.45) {
+    roads.push({ id: `urban-road-side-${chunkX}-${chunkY}`, x: districtX + districtW - 220, y: districtY + 75, w: 88, h: districtH - 150 });
+  }
+
+  const structures = [
+    { id: `urban-building-a-${chunkX}-${chunkY}`, type: "urbanBuilding", x: districtX + 150, y: districtY + 160, w: 142, h: 116, fixed: true, color: chooseCityColor(next) },
+    { id: `urban-building-b-${chunkX}-${chunkY}`, type: "urbanBuilding", x: districtX + districtW - 160, y: districtY + 170, w: 150, h: 126, fixed: true, color: chooseCityColor(next) },
+    { id: `urban-building-c-${chunkX}-${chunkY}`, type: "urbanBuilding", x: districtX + districtW - 170, y: districtY + districtH - 165, w: 154, h: 124, fixed: true, color: chooseCityColor(next) },
+  ];
+  if (next() > 0.55) {
+    structures.push({
+      id: `urban-parkour-${chunkX}-${chunkY}`,
+      type: "parkourHouse",
+      name: "City Parkour House",
+      kind: "parkour",
+      x: districtX + 150,
+      y: districtY + districtH - 135,
+      w: 150,
+      h: 108,
+      fixed: true,
+      color: "#789e6b",
+    });
+  }
+
+  const walls = structures
+    .filter((item) => item.type === "urbanBuilding")
+    .map((item) => ({
+      id: `${item.id}-wall`,
+      x: item.x - item.w / 2,
+      y: item.y - item.h / 2,
+      w: item.w,
+      h: item.h,
+      material: "concrete",
+      color: item.color,
+      mineable: false,
+    }));
+  const water = [
+    { id: `urban-park-water-${chunkX}-${chunkY}`, type: "water", x: park.x - 36, y: park.y - 42, w: park.w + 72, h: 52, urban: true, round: 16 },
+    { id: `urban-canal-${chunkX}-${chunkY}`, type: "water", x: districtX + 38, y: districtY + 60, w: 70, h: districtH - 120, urban: true, round: 14 },
+  ];
+  const lilyPads = [
+    { id: `urban-pad-park-${chunkX}-${chunkY}`, x: park.x + park.w / 2, y: park.y - 17, phase: next() * Math.PI * 2 },
+    { id: `urban-pad-canal-${chunkX}-${chunkY}`, x: districtX + 73, y: cy + 110, phase: next() * Math.PI * 2 },
+  ];
+  const pickups = [
+    { id: `urban-flies-${chunkX}-${chunkY}`, currency: "flies", x: park.x + park.w * 0.52, y: park.y + park.h * 0.55, value: 3 },
+    { id: `urban-pearl-${chunkX}-${chunkY}`, currency: "pearls", x: districtX + districtW - 245, y: districtY + districtH - 235, value: 1 },
+  ];
+  const cars = makeChunkTraffic(roads, chunkX, chunkY);
+
+  return {
+    key: `${chunkX}:${chunkY}`,
+    urban: true,
+    walls,
+    water,
+    lilyPads,
+    structures,
+    pickups,
+    roads,
+    parks: [park],
+    cars,
+  };
+}
+
+function makeChunkTraffic(roads, chunkX, chunkY) {
+  const colors = ["#e65b4f", "#4d8bd9", "#f0b93f", "#57a96b", "#9d6cc7"];
+  const cars = [];
+  for (const road of roads) {
+    const horizontal = road.w >= road.h;
+    for (let lane = 0; lane < 2; lane += 1) {
+      const laneOffset = (lane + 0.5) / 2;
+      cars.push({
+        id: `chunk-car-${road.id}-${lane}`,
+        name: "Road car",
+        x: horizontal ? road.x + 18 : road.x + road.w * laneOffset - 17,
+        y: horizontal ? road.y + road.h * laneOffset - 17 : road.y + 18,
+        w: horizontal ? road.w - 36 : 34,
+        h: horizontal ? 34 : road.h - 36,
+        axis: horizontal ? "x" : "y",
+        speed: 132 + lane * 42 + Math.abs(chunkX + chunkY) % 30,
+        offset: (lane * 0.43 + Math.abs(chunkX * 0.17 + chunkY * 0.11)) % 1,
+        direction: lane % 2 === 0 ? 1 : -1,
+        color: colors[(Math.abs(chunkX) + Math.abs(chunkY) + lane) % colors.length],
+        stealsFlies: 5,
+      });
+    }
+  }
+  return cars;
 }
