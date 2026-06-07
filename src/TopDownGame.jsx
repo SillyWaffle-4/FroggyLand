@@ -2,7 +2,9 @@ import React from "react";
 import { MAX_DT, TARGET_FRAME_MS, VIEW_HEIGHT, VIEW_WIDTH, keys } from "./game/constants.js";
 import {
   CHECKPOINT_COST,
+  HOUSE_COST,
   buildTopDownCheckpoint,
+  buildTopDownHouse,
   createTopDownState,
   drawTopDownGame,
   findNearbyMineableWall,
@@ -14,10 +16,10 @@ import {
   updateTopDownGame,
 } from "./game/topDownMode.js";
 
-export function TopDownGame({ soundOn }) {
+export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatformer }) {
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
-  const stateRef = React.useRef(createTopDownState());
+  const stateRef = React.useRef(createTopDownState(progress));
   const pressedRef = React.useRef(new Set());
   const pointerRef = React.useRef({ x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, down: false });
   const soundOnRef = React.useRef(soundOn);
@@ -27,13 +29,28 @@ export function TopDownGame({ soundOn }) {
     soundOnRef.current = soundOn;
   }, [soundOn]);
 
+  const handleInteract = React.useCallback(() => {
+    const result = interactTopDownPlace(stateRef.current, soundOnRef.current);
+    setHud(makeTopDownHud(stateRef.current));
+    if (result?.mode === "platformer") {
+      onEnterPlatformer?.(result.entry);
+    }
+  }, [onEnterPlatformer]);
+
+  const handleBuildHouse = React.useCallback(() => {
+    const house = buildTopDownHouse(stateRef.current, soundOnRef.current);
+    if (house) {
+      onProgressChange?.({ house });
+    }
+    setHud(makeTopDownHud(stateRef.current));
+  }, [onProgressChange]);
+
   React.useEffect(() => {
     const onKeyDown = (event) => {
       if (event.code === "KeyE") {
         event.preventDefault();
         if (!event.repeat) {
-          interactTopDownPlace(stateRef.current, soundOnRef.current);
-          setHud(makeTopDownHud(stateRef.current));
+          handleInteract();
         }
         return;
       }
@@ -42,6 +59,13 @@ export function TopDownGame({ soundOn }) {
         if (!event.repeat) {
           mineNearbyWall(stateRef.current, soundOnRef.current);
           setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyH") {
+        event.preventDefault();
+        if (!event.repeat) {
+          handleBuildHouse();
         }
         return;
       }
@@ -73,7 +97,7 @@ export function TopDownGame({ soundOn }) {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, []);
+  }, [handleBuildHouse, handleInteract]);
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -186,16 +210,13 @@ export function TopDownGame({ soundOn }) {
           <div><span>Checkpoint</span><strong>{hud.checkpointLabel}</strong></div>
           <div><span>Map</span><strong>{hud.mapSize}</strong></div>
         </div>
-        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint) && (
+        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint || hud.canBuildHouse) && (
           <div className="action-grid">
             {hud.canInteract && (
               <button
                 type="button"
                 className="panel-button"
-                onClick={() => {
-                  interactTopDownPlace(stateRef.current, soundOnRef.current);
-                  setHud(makeTopDownHud(stateRef.current));
-                }}
+                onClick={handleInteract}
               >
                 Use {hud.nearbyPlaceName}
               </button>
@@ -236,6 +257,15 @@ export function TopDownGame({ soundOn }) {
                 Teleport
               </button>
             )}
+            {hud.canBuildHouse && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={handleBuildHouse}
+              >
+                Build House
+              </button>
+            )}
           </div>
         )}
         <p className="notice">{hud.notice}</p>
@@ -244,6 +274,7 @@ export function TopDownGame({ soundOn }) {
           <span><kbd>Space</kbd> Lily leap</span>
           {hud.canInteract && <span><kbd>E</kbd> Shop</span>}
           <span><kbd>B</kbd> Build checkpoint</span>
+          {!hud.hasHouse && <span><kbd>H</kbd> Build house</span>}
           {hud.canTeleport && <span><kbd>T</kbd> Teleport</span>}
           <span><kbd>M</kbd> Mine</span>
         </div>
@@ -265,11 +296,13 @@ function makeTopDownHud(state) {
     pickaxeName: pickaxe.tier > 0 ? pickaxe.material : "None",
     checkpointLabel: state.builtCheckpoint ? "Built" : `${CHECKPOINT_COST.pearls}P ${CHECKPOINT_COST.amber}A`,
     hasCheckpoint: Boolean(state.builtCheckpoint),
+    hasHouse: Boolean(state.playerHouse),
     notice: state.notice,
     canInteract: Boolean(nearbyPlace),
     nearbyPlaceName: nearbyPlace?.name ?? "Shop",
     canMine: Boolean(findNearbyMineableWall(state)),
     canBuildCheckpoint: state.pearls >= CHECKPOINT_COST.pearls && state.amber >= CHECKPOINT_COST.amber,
     canTeleport: Boolean(state.builtCheckpoint),
+    canBuildHouse: !state.playerHouse && state.score >= HOUSE_COST.flies && state.pearls >= HOUSE_COST.pearls && state.amber >= HOUSE_COST.amber,
   };
 }

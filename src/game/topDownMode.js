@@ -12,6 +12,7 @@ const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
 export const CHECKPOINT_COST = { pearls: 6, amber: 2 };
+export const HOUSE_COST = { flies: 8, pearls: 3, amber: 1 };
 export const TOP_DOWN_ZOOM = 0.86;
 
 export const PICKAXES = [
@@ -31,7 +32,7 @@ const WALL_MATERIALS = {
 
 const URBAN_FEATURES = makeUrbanFeatures();
 
-export function createTopDownState() {
+export function createTopDownState(progress = {}) {
   const frog = { x: CENTER - 180, y: CENTER + 420, facing: 1, jumpHeld: false };
   const state = {
     worldSize: TOP_DOWN_WORLD_SIZE,
@@ -52,6 +53,7 @@ export function createTopDownState() {
     minedWalls: new Set(),
     wallDamage: new Map(),
     builtCheckpoint: null,
+    playerHouse: progress.house ? makePlayerHouse(progress.house.x, progress.house.y) : null,
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -204,6 +206,9 @@ function getActiveTopDown(state) {
   active.walls.push(...URBAN_FEATURES.walls.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.structures.push(...URBAN_FEATURES.structures.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.pickups.push(...URBAN_FEATURES.pickups.filter((item) => isVisible({ x: item.x - 16, y: item.y - 16, w: 32, h: 32 }, minX, minY, maxX, maxY)));
+  if (state.playerHouse && isVisible(state.playerHouse, minX, minY, maxX, maxY)) {
+    active.structures.push(state.playerHouse);
+  }
   return active;
 }
 
@@ -348,11 +353,17 @@ function discoverStructures(state, soundOn) {
 }
 
 export function findNearbyTopDownPlace(state) {
-  return URBAN_FEATURES.places.find((place) => {
+  return getTopDownPlaces(state).find((place) => {
     const dx = state.frog.x - place.x;
     const dy = state.frog.y - place.y;
     return dx * dx + dy * dy < 125 * 125;
   }) ?? null;
+}
+
+function getTopDownPlaces(state) {
+  return state.playerHouse
+    ? [...URBAN_FEATURES.places, state.playerHouse]
+    : URBAN_FEATURES.places;
 }
 
 export function getCurrentPickaxe(state) {
@@ -384,6 +395,18 @@ export function interactTopDownPlace(state, soundOn) {
   if (!place) {
     setNotice(state, "No top-down shop nearby.");
     return false;
+  }
+
+  if (place.kind === "parkour") {
+    setNotice(state, "Entering Parkour Village House. Clear platformer routes to earn house parts.", 2);
+    if (soundOn) beep(900, 0.06);
+    return { mode: "platformer", entry: "parkourVillage" };
+  }
+
+  if (place.kind === "playerHouse") {
+    setNotice(state, "Entering your house interior. Spend platformer rewards to decorate.", 2);
+    if (soundOn) beep(780, 0.06);
+    return { mode: "platformer", entry: "houseInterior" };
   }
 
   if (place.kind === "upgrade") {
@@ -436,6 +459,27 @@ export function interactTopDownPlace(state, soundOn) {
   setNotice(state, "Traded 4 flies for 1 amber and 1 pearl.");
   if (soundOn) beep(740, 0.05);
   return true;
+}
+
+export function buildTopDownHouse(state, soundOn) {
+  if (state.playerHouse) {
+    setNotice(state, "Your house is already placed. Press E near it to edit the inside.");
+    return null;
+  }
+  if (state.score < HOUSE_COST.flies || state.pearls < HOUSE_COST.pearls || state.amber < HOUSE_COST.amber) {
+    setNotice(state, `House costs ${HOUSE_COST.flies} flies, ${HOUSE_COST.pearls} pearls, and ${HOUSE_COST.amber} amber.`);
+    if (soundOn) beep(160, 0.04);
+    return null;
+  }
+
+  state.score -= HOUSE_COST.flies;
+  state.pearls -= HOUSE_COST.pearls;
+  state.amber -= HOUSE_COST.amber;
+  const house = makePlayerHouse(state.frog.x + 92, state.frog.y - 6);
+  state.playerHouse = house;
+  setNotice(state, "House placed. Press E near it to edit inside in platformer mode.", 3.2);
+  if (soundOn) beep(1040, 0.07);
+  return { x: house.x, y: house.y };
 }
 
 export function mineNearbyWall(state, soundOn) {
@@ -641,6 +685,10 @@ function drawStructures(ctx, state) {
       drawShop(ctx, item, "#6f7b75", "PX");
     } else if (item.type === "tradePost") {
       drawShop(ctx, item, "#d58432", "TR");
+    } else if (item.type === "parkourHouse") {
+      drawHousePortal(ctx, item, "#5fcb55", "PK");
+    } else if (item.type === "playerHouse") {
+      drawHousePortal(ctx, item, "#ffdf5d", "MY");
     } else if (item.type === "urbanBuilding") {
       drawCityBuilding(ctx, item);
     } else if (item.type === "ruin") {
@@ -695,6 +743,26 @@ function drawStructures(ctx, state) {
     }
     ctx.restore();
   }
+}
+
+function drawHousePortal(ctx, item, roofColor, label) {
+  ctx.fillStyle = "#f3c176";
+  roundRect(ctx, -item.w / 2, -item.h / 2 + 12, item.w, item.h - 12, 8);
+  ctx.fill();
+  ctx.fillStyle = roofColor;
+  ctx.beginPath();
+  ctx.moveTo(-item.w / 2 - 12, -item.h / 2 + 18);
+  ctx.lineTo(0, -item.h / 2 - 36);
+  ctx.lineTo(item.w / 2 + 12, -item.h / 2 + 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#7a5938";
+  roundRect(ctx, -16, 6, 32, 42, 5);
+  ctx.fill();
+  ctx.fillStyle = "#173820";
+  ctx.font = "900 17px Inter, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(label, 0, -3);
 }
 
 function drawShop(ctx, item, color, label) {
@@ -825,6 +893,18 @@ function makeUrbanFeatures() {
       fixed: true,
       talk: "Press E to trade 4 flies for 1 amber and 1 pearl.",
     },
+    {
+      id: "parkour-village-house",
+      type: "parkourHouse",
+      name: "Parkour Village House",
+      kind: "parkour",
+      x: cx - 635,
+      y: cy - 55,
+      w: 170,
+      h: 120,
+      fixed: true,
+      talk: "Press E to enter a platformer challenge and earn house parts.",
+    },
   ];
   const buildings = [
     { id: "city-block-a", type: "urbanBuilding", x: cx - 630, y: cy + 52, w: 180, h: 150, fixed: true, color: "#76828a" },
@@ -864,6 +944,21 @@ function makeUrbanFeatures() {
     places: shops,
     walls,
     pickups,
+  };
+}
+
+function makePlayerHouse(x, y) {
+  return {
+    id: "player-house",
+    type: "playerHouse",
+    name: "Your House",
+    kind: "playerHouse",
+    x,
+    y,
+    w: 170,
+    h: 120,
+    fixed: true,
+    talk: "Press E to edit the inside in platformer mode.",
   };
 }
 

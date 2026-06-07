@@ -5,16 +5,57 @@ import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
 
+const STARTING_PROGRESS = {
+  house: null,
+  houseParts: {
+    window: 0,
+    rug: 0,
+    lantern: 0,
+    trophy: 0,
+  },
+  placedInterior: {
+    window: 0,
+    rug: 0,
+    lantern: 0,
+    trophy: 0,
+  },
+  rewards: {},
+};
+
 function App() {
   const [runId, setRunId] = React.useState(1);
   const [soundOn, setSoundOn] = React.useState(false);
   const [mode, setMode] = React.useState(null);
+  const [platformerEntry, setPlatformerEntry] = React.useState("openMap");
+  const [progress, setProgress] = React.useState(STARTING_PROGRESS);
+
+  const updateProgress = React.useCallback((updater) => {
+    setProgress((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      return {
+        ...current,
+        ...next,
+        houseParts: { ...current.houseParts, ...(next.houseParts ?? {}) },
+        placedInterior: { ...current.placedInterior, ...(next.placedInterior ?? {}) },
+        rewards: { ...current.rewards, ...(next.rewards ?? {}) },
+      };
+    });
+  }, []);
+
+  const enterPlatformer = React.useCallback((entry = "openMap") => {
+    setPlatformerEntry(entry);
+    setMode("platformer");
+    setRunId((value) => value + 1);
+  }, []);
 
   if (!mode) {
     return (
       <main className="app-shell menu-shell">
         <ModeMenu
           onSelect={(nextMode) => {
+            if (nextMode === "platformer") {
+              setPlatformerEntry("openMap");
+            }
             setMode(nextMode);
             setRunId((value) => value + 1);
           }}
@@ -28,7 +69,11 @@ function App() {
       <section className="topbar" aria-label="Game controls">
         <div>
           <h1>FroggyLand</h1>
-          <p>{mode === "platformer" ? "Open-map platformer" : "Top-down pond explorer"}</p>
+          <p>
+            {mode === "platformer"
+              ? platformerEntry === "houseInterior" ? "House interior editor" : platformerEntry === "parkourVillage" ? "Parkour village challenge" : "Open-map platformer"
+              : "Top-down pond explorer"}
+          </p>
         </div>
         <div className="button-row">
           <button
@@ -61,9 +106,22 @@ function App() {
       </section>
 
       {mode === "platformer" ? (
-        <FrogGame key={`platformer-${runId}`} soundOn={soundOn} />
+        <FrogGame
+          key={`platformer-${runId}-${platformerEntry}`}
+          soundOn={soundOn}
+          entry={platformerEntry}
+          progress={progress}
+          onProgressChange={updateProgress}
+          onExitToTopDown={() => setMode("topdown")}
+        />
       ) : (
-        <TopDownGame key={`topdown-${runId}`} soundOn={soundOn} />
+        <TopDownGame
+          key={`topdown-${runId}`}
+          soundOn={soundOn}
+          progress={progress}
+          onProgressChange={updateProgress}
+          onEnterPlatformer={enterPlatformer}
+        />
       )}
     </main>
   );

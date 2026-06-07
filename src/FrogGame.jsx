@@ -12,18 +12,57 @@ import {
   updateGame,
 } from "./game/simulation.js";
 
-export function FrogGame({ soundOn }) {
+const HOUSE_PARTS = [
+  { id: "window", name: "Round Window" },
+  { id: "rug", name: "Leaf Rug" },
+  { id: "lantern", name: "Glow Lantern" },
+  { id: "trophy", name: "Parkour Trophy" },
+];
+
+const PARKOUR_REWARDS = [
+  { id: "parkour-window", x: 1540, part: "window", amount: 1, name: "Round Window" },
+  { id: "parkour-rug", x: 2780, part: "rug", amount: 1, name: "Leaf Rug" },
+  { id: "parkour-lantern", x: 4300, part: "lantern", amount: 1, name: "Glow Lantern" },
+  { id: "parkour-trophy", x: 6200, part: "trophy", amount: 1, name: "Parkour Trophy" },
+];
+
+const EMPTY_PROGRESS = {
+  houseParts: {},
+  placedInterior: {},
+  rewards: {},
+};
+
+export function FrogGame(props) {
+  if (props.entry === "houseInterior") {
+    return <HouseInteriorEditor {...props} />;
+  }
+  return <PlatformerGame {...props} />;
+}
+
+function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
-  const stateRef = React.useRef(createInitialState());
+  const progressRef = React.useRef(progress);
+  const stateRef = React.useRef(null);
+  if (!stateRef.current) {
+    stateRef.current = createInitialState();
+    if (entry === "parkourVillage") {
+      stateRef.current.notice = "Parkour Village House: reach marked routes to earn house parts.";
+      stateRef.current.noticeTimer = 4;
+    }
+  }
   const pressedRef = React.useRef(new Set());
   const pointerRef = React.useRef({ x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, down: false });
   const soundOnRef = React.useRef(soundOn);
-  const [hud, setHud] = React.useState(() => makeHud(stateRef.current));
+  const [hud, setHud] = React.useState(() => makeHud(stateRef.current, entry, progress));
 
   React.useEffect(() => {
     soundOnRef.current = soundOn;
   }, [soundOn]);
+
+  React.useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
 
   React.useEffect(() => {
     const onKeyDown = (event) => {
@@ -95,12 +134,15 @@ export function FrogGame({ soundOn }) {
       last = now;
       lastFrame = now;
       updateGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
+      if (entry === "parkourVillage") {
+        grantParkourReward(stateRef.current, progressRef.current, onProgressChange);
+      }
       drawGame(context, stateRef.current);
 
       hudTimer += dt;
       if (hudTimer > 0.2) {
         hudTimer = 0;
-        const nextHud = makeHud(stateRef.current);
+        const nextHud = makeHud(stateRef.current, entry, progressRef.current);
         const nextHudKey = JSON.stringify(nextHud);
         if (nextHudKey !== lastHudKey) {
           lastHudKey = nextHudKey;
@@ -112,7 +154,7 @@ export function FrogGame({ soundOn }) {
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, []);
+  }, [entry, onProgressChange]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -186,9 +228,24 @@ export function FrogGame({ soundOn }) {
             <span>Range</span>
             <strong>{hud.tongueRange}</strong>
           </div>
+          {hud.canReturnTopDown && (
+            <div>
+              <span>Parts</span>
+              <strong>{hud.partTotal}</strong>
+            </div>
+          )}
         </div>
-        {(hud.canTrade || hud.canPlace) && (
+        {(hud.canTrade || hud.canPlace || hud.canReturnTopDown) && (
           <div className="action-grid">
+            {hud.canReturnTopDown && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={onExitToTopDown}
+              >
+                Return Top Down
+              </button>
+            )}
             {hud.canTrade && (
               <button
                 type="button"
@@ -216,16 +273,18 @@ export function FrogGame({ soundOn }) {
           <span><kbd>Click</kbd> Tongue</span>
           {hud.canTrade && <span><kbd>E</kbd> Trade</span>}
           {hud.canPlace && <span><kbd>P</kbd> Place</span>}
+          {hud.canReturnTopDown && <span><kbd>Modes</kbd> Return</span>}
         </div>
       </aside>
     </section>
   );
 }
 
-function makeHud(state) {
+function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
   const nearbyNpc = findNearbyNpc(state);
+  const partTotal = Object.values(progress.houseParts ?? {}).reduce((total, value) => total + value, 0);
   return {
-    regionName: state.regionName,
+    regionName: entry === "parkourVillage" ? "Parkour Village House" : state.regionName,
     score: state.score,
     lilyPads: state.lilyPads,
     pearls: state.pearls,
@@ -236,8 +295,111 @@ function makeHud(state) {
     nearbyNpcName: nearbyNpc?.name ?? null,
     canTrade: Boolean(nearbyNpc),
     canPlace: state.lilyPads > 0 || state.placementMode,
+    canReturnTopDown: entry !== "openMap",
     tutorialComplete: state.tutorialComplete,
     tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
+    partTotal,
     notice: state.notice,
   };
+}
+
+function grantParkourReward(state, progress, onProgressChange) {
+  const reward = PARKOUR_REWARDS.find((item) => state.frog.x >= item.x && !progress.rewards?.[item.id]);
+  if (!reward) return;
+  onProgressChange?.((current) => ({
+    houseParts: {
+      [reward.part]: (current.houseParts?.[reward.part] ?? 0) + reward.amount,
+    },
+    rewards: {
+      [reward.id]: true,
+    },
+  }));
+  state.notice = `Platformer reward earned: ${reward.name}.`;
+  state.noticeTimer = 3.4;
+}
+
+function HouseInteriorEditor({ progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
+  const parts = progress.houseParts ?? {};
+  const placed = progress.placedInterior ?? {};
+
+  const placePart = (partId) => {
+    const owned = parts[partId] ?? 0;
+    const used = placed[partId] ?? 0;
+    if (used >= owned) return;
+    onProgressChange?.({ placedInterior: { [partId]: used + 1 } });
+  };
+
+  const removePart = (partId) => {
+    const used = placed[partId] ?? 0;
+    if (used <= 0) return;
+    onProgressChange?.({ placedInterior: { [partId]: used - 1 } });
+  };
+
+  return (
+    <section className="game-layout house-interior-layout">
+      <div className="house-room" aria-label="House interior">
+        <div className="room-wall">
+          {Array.from({ length: placed.window ?? 0 }).map((_, index) => (
+            <span key={`window-${index}`} className="room-window" />
+          ))}
+          {Array.from({ length: placed.lantern ?? 0 }).map((_, index) => (
+            <span key={`lantern-${index}`} className="room-lantern" />
+          ))}
+          {Array.from({ length: placed.trophy ?? 0 }).map((_, index) => (
+            <span key={`trophy-${index}`} className="room-trophy" />
+          ))}
+        </div>
+        <div className="room-floor">
+          {Array.from({ length: placed.rug ?? 0 }).map((_, index) => (
+            <span key={`rug-${index}`} className="room-rug" />
+          ))}
+        </div>
+      </div>
+
+      <aside className="panel">
+        <div className="area-name">
+          <span>Inside</span>
+          <strong>Your House</strong>
+        </div>
+        <div className="inventory-grid" aria-label="House parts">
+          {HOUSE_PARTS.map((part) => (
+            <div key={part.id}>
+              <span>{part.name}</span>
+              <strong>{placed[part.id] ?? 0}/{parts[part.id] ?? 0}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="house-part-grid">
+          {HOUSE_PARTS.map((part) => {
+            const owned = parts[part.id] ?? 0;
+            const used = placed[part.id] ?? 0;
+            return (
+              <React.Fragment key={part.id}>
+                <button
+                  type="button"
+                  className="panel-button"
+                  disabled={used >= owned}
+                  onClick={() => placePart(part.id)}
+                >
+                  Place {part.name}
+                </button>
+                <button
+                  type="button"
+                  className="panel-button"
+                  disabled={used <= 0}
+                  onClick={() => removePart(part.id)}
+                >
+                  Remove
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+        <button type="button" className="panel-button" onClick={onExitToTopDown}>
+          Return Top Down
+        </button>
+        <p className="notice">Parkour Village House rewards unlock more parts.</p>
+      </aside>
+    </section>
+  );
 }
