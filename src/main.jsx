@@ -24,7 +24,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell play-shell">
       <section className="topbar" aria-label="Game controls">
         <div>
           <h1>FroggyLand</h1>

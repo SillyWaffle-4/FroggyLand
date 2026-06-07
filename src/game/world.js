@@ -1,4 +1,4 @@
-import { VIEW_WIDTH } from "./constants.js";
+import { VIEW_WIDTH, WORLD_LIMIT } from "./constants.js";
 import { meadow } from "./maps/meadow.js";
 import { mushroomCave } from "./maps/mushroomCave.js";
 import { canopyRuins } from "./maps/canopyRuins.js";
@@ -28,7 +28,8 @@ const CHUNKS = [
   forktailJunction,
 ];
 const BUCKET_SIZE = 520;
-const generatedStructures = generatePlatformerStructures(34350);
+const PLATFORMER_WORLD_WIDTH = Math.min(34350, WORLD_LIMIT);
+const generatedStructures = generatePlatformerStructures(PLATFORMER_WORLD_WIDTH);
 
 function flatten(key) {
   return CHUNKS.flatMap((chunk) => chunk[key] ?? []);
@@ -58,7 +59,7 @@ function buildBuckets(items) {
 
 export const WORLD = {
   name: "Froggy Wilds",
-  worldWidth: 34350,
+  worldWidth: PLATFORMER_WORLD_WIDTH,
   spawn: { x: 86, y: 498 },
   goal: { x: 34230, y: 345 },
   regions: CHUNKS.map(({ name, startX, endX }) => ({ name, startX, endX })),

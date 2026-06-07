@@ -6,6 +6,8 @@ import {
   cancelTopDownBuild,
   createTopDownState,
   drawTopDownGame,
+  findNearbyTopDownPlace,
+  interactTopDownPlace,
   placeTopDownBuildItem,
   selectTopDownBuildItem,
   updateTopDownGame,
@@ -30,7 +32,15 @@ export function TopDownGame({ soundOn }) {
         cancelTopDownBuild(stateRef.current);
         return;
       }
-      if ([...keys.left, ...keys.right, ...keys.jump, "KeyS"].includes(event.code)) {
+      if (event.code === "KeyE") {
+        event.preventDefault();
+        if (!event.repeat) {
+          interactTopDownPlace(stateRef.current, soundOnRef.current);
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if ([...keys.left, ...keys.right, ...keys.jump, "KeyS", "ArrowDown"].includes(event.code)) {
         event.preventDefault();
         pressedRef.current.add(event.code);
       }
@@ -104,8 +114,8 @@ export function TopDownGame({ soundOn }) {
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
     return {
-      x: ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH,
-      y: ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT,
+      x: ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH + stateRef.current.cameraX,
+      y: ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT + stateRef.current.cameraY,
     };
   }, []);
 
@@ -152,10 +162,26 @@ export function TopDownGame({ soundOn }) {
           <div><span>Flies</span><strong>{hud.score}</strong></div>
           <div><span>Pearls</span><strong>{hud.pearls}</strong></div>
           <div><span>Amber</span><strong>{hud.amber}</strong></div>
-          <div><span>Found</span><strong>{hud.discovered}/{hud.totalStructures}</strong></div>
+          <div><span>Found</span><strong>{hud.discovered}</strong></div>
           <div><span>Home</span><strong>{hud.placedBuilds}</strong></div>
           <div><span>Mode</span><strong>{hud.buildMode ? "Build" : "Explore"}</strong></div>
+          <div><span>Leap</span><strong>{hud.leapReady}</strong></div>
+          <div><span>Map</span><strong>{hud.mapSize}</strong></div>
         </div>
+        {hud.canInteract && (
+          <div className="action-grid">
+            <button
+              type="button"
+              className="panel-button"
+              onClick={() => {
+                interactTopDownPlace(stateRef.current, soundOnRef.current);
+                setHud(makeTopDownHud(stateRef.current));
+              }}
+            >
+              Use {hud.nearbyPlaceName}
+            </button>
+          </div>
+        )}
         <div className="build-shop" aria-label="Top-down build shop">
           <div className="shop-title">
             <span>Decorate</span>
@@ -201,6 +227,8 @@ export function TopDownGame({ soundOn }) {
         <p className="notice">{hud.notice}</p>
         <div className="control-list" aria-label="Top-down controls">
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span>
+          <span><kbd>Space</kbd> Lily leap</span>
+          {hud.canInteract && <span><kbd>E</kbd> Shop</span>}
           {hud.buildMode && <span><kbd>Click</kbd> Place {hud.buildName}</span>}
         </div>
       </aside>
@@ -209,16 +237,20 @@ export function TopDownGame({ soundOn }) {
 }
 
 function makeTopDownHud(state) {
+  const nearbyPlace = findNearbyTopDownPlace(state);
   return {
     score: state.score,
     pearls: state.pearls,
     amber: state.amber,
     discovered: state.discoveredStructures.size,
-    totalStructures: state.structures.length,
+    mapSize: `${Math.round(state.worldSize / 1000)}k x ${Math.round(state.worldSize / 1000)}k`,
+    leapReady: state.leapTimer > 0 ? "Jumping" : state.lilyBoostTimer > 0 ? "Ready" : `Lv ${state.leapUpgrade}`,
     buildInventory: state.buildInventory,
     buildMode: state.buildMode,
     buildName: BUILD_CATALOG.find((item) => item.id === state.buildMode)?.name ?? "Build",
     placedBuilds: state.placedBuilds.length,
     notice: state.notice,
+    canInteract: Boolean(nearbyPlace),
+    nearbyPlaceName: nearbyPlace?.name ?? "Shop",
   };
 }

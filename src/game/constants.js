@@ -1,5 +1,7 @@
 export const VIEW_WIDTH = 1100;
 export const VIEW_HEIGHT = 620;
+export const WORLD_LIMIT = 300000;
+export const TOP_DOWN_WORLD_SIZE = WORLD_LIMIT;
 export const GROUND_Y = 540;
 export const FROG_WIDTH = 58;
 export const FROG_HEIGHT = 42;
