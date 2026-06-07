@@ -11,6 +11,7 @@ const LEAP_SPEED_MULTIPLIER = 1.45;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
+export const CHECKPOINT_COST = { pearls: 6, amber: 2 };
 export const TOP_DOWN_ZOOM = 0.86;
 
 export const PICKAXES = [
@@ -50,6 +51,7 @@ export function createTopDownState() {
     collectedPickups: new Set(),
     minedWalls: new Set(),
     wallDamage: new Map(),
+    builtCheckpoint: null,
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -103,6 +105,44 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
       state.notice = "Explore the 300k x 300k pondland. Water is common near walls, and the city hub sits in the middle.";
     }
   }
+}
+
+export function buildTopDownCheckpoint(state, soundOn) {
+  if (state.pearls < CHECKPOINT_COST.pearls || state.amber < CHECKPOINT_COST.amber) {
+    setNotice(state, `Checkpoint costs ${CHECKPOINT_COST.pearls} pearls and ${CHECKPOINT_COST.amber} amber.`);
+    if (soundOn) beep(160, 0.04);
+    return false;
+  }
+
+  state.pearls -= CHECKPOINT_COST.pearls;
+  state.amber -= CHECKPOINT_COST.amber;
+  state.builtCheckpoint = {
+    x: state.frog.x,
+    y: state.frog.y,
+    createdAt: state.time,
+  };
+  setNotice(state, "Checkpoint built. Press T anytime to teleport back here.", 3.2);
+  if (soundOn) beep(1040, 0.07);
+  return true;
+}
+
+export function teleportToTopDownCheckpoint(state, soundOn) {
+  if (!state.builtCheckpoint) {
+    setNotice(state, "Build a checkpoint first with B.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  state.frog.x = clamp(state.builtCheckpoint.x, 28, state.worldSize - 28);
+  state.frog.y = clamp(state.builtCheckpoint.y, 36, state.worldSize - 36);
+  state.leapTimer = 0;
+  state.lilyBoostTimer = 0;
+  state.frog.jumpHeld = false;
+  updateCamera(state);
+  state.active = getActiveTopDown(state);
+  setNotice(state, "Teleported to your checkpoint.", 2.2);
+  if (soundOn) beep(880, 0.06);
+  return true;
 }
 
 function moveTopDownFrog(state, pressed, dt) {
@@ -449,8 +489,38 @@ export function drawTopDownGame(ctx, state) {
   drawLilyPads(ctx, state);
   drawWalls(ctx, state);
   drawStructures(ctx, state);
+  drawBuiltCheckpoint(ctx, state);
   drawTopDownPickups(ctx, state);
   drawFrog(ctx, state);
+  ctx.restore();
+}
+
+function drawBuiltCheckpoint(ctx, state) {
+  if (!state.builtCheckpoint) return;
+  const checkpoint = state.builtCheckpoint;
+  const pulse = 1 + Math.sin(state.time * 4) * 0.08;
+  ctx.save();
+  ctx.translate(checkpoint.x, checkpoint.y);
+  ctx.fillStyle = "rgba(255, 223, 93, 0.3)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffdf5d";
+  roundRect(ctx, -16, -34, 32, 48, 7);
+  ctx.fill();
+  ctx.fillStyle = "#2f7d46";
+  ctx.beginPath();
+  ctx.moveTo(0, -52);
+  ctx.lineTo(34, -35);
+  ctx.lineTo(0, -18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#173820";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -34);
+  ctx.lineTo(0, 24);
+  ctx.stroke();
   ctx.restore();
 }
 

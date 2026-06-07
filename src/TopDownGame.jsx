@@ -1,6 +1,8 @@
 import React from "react";
 import { MAX_DT, TARGET_FRAME_MS, VIEW_HEIGHT, VIEW_WIDTH, keys } from "./game/constants.js";
 import {
+  CHECKPOINT_COST,
+  buildTopDownCheckpoint,
   createTopDownState,
   drawTopDownGame,
   findNearbyMineableWall,
@@ -8,6 +10,7 @@ import {
   getCurrentPickaxe,
   interactTopDownPlace,
   mineNearbyWall,
+  teleportToTopDownCheckpoint,
   updateTopDownGame,
 } from "./game/topDownMode.js";
 
@@ -38,6 +41,22 @@ export function TopDownGame({ soundOn }) {
         event.preventDefault();
         if (!event.repeat) {
           mineNearbyWall(stateRef.current, soundOnRef.current);
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyB") {
+        event.preventDefault();
+        if (!event.repeat) {
+          buildTopDownCheckpoint(stateRef.current, soundOnRef.current);
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyT") {
+        event.preventDefault();
+        if (!event.repeat) {
+          teleportToTopDownCheckpoint(stateRef.current, soundOnRef.current);
           setHud(makeTopDownHud(stateRef.current));
         }
         return;
@@ -164,9 +183,10 @@ export function TopDownGame({ soundOn }) {
           <div><span>Found</span><strong>{hud.discovered}</strong></div>
           <div><span>Leap</span><strong>{hud.leapReady}</strong></div>
           <div><span>Pickaxe</span><strong>{hud.pickaxeName}</strong></div>
+          <div><span>Checkpoint</span><strong>{hud.checkpointLabel}</strong></div>
           <div><span>Map</span><strong>{hud.mapSize}</strong></div>
         </div>
-        {(hud.canInteract || hud.canMine) && (
+        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint) && (
           <div className="action-grid">
             {hud.canInteract && (
               <button
@@ -192,6 +212,30 @@ export function TopDownGame({ soundOn }) {
                 Mine Wall
               </button>
             )}
+            {hud.canBuildCheckpoint && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={() => {
+                  buildTopDownCheckpoint(stateRef.current, soundOnRef.current);
+                  setHud(makeTopDownHud(stateRef.current));
+                }}
+              >
+                {hud.hasCheckpoint ? "Move Checkpoint" : "Build Checkpoint"}
+              </button>
+            )}
+            {hud.canTeleport && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={() => {
+                  teleportToTopDownCheckpoint(stateRef.current, soundOnRef.current);
+                  setHud(makeTopDownHud(stateRef.current));
+                }}
+              >
+                Teleport
+              </button>
+            )}
           </div>
         )}
         <p className="notice">{hud.notice}</p>
@@ -199,6 +243,8 @@ export function TopDownGame({ soundOn }) {
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span>
           <span><kbd>Space</kbd> Lily leap</span>
           {hud.canInteract && <span><kbd>E</kbd> Shop</span>}
+          <span><kbd>B</kbd> Build checkpoint</span>
+          {hud.canTeleport && <span><kbd>T</kbd> Teleport</span>}
           <span><kbd>M</kbd> Mine</span>
         </div>
       </aside>
@@ -217,9 +263,13 @@ function makeTopDownHud(state) {
     mapSize: `${Math.round(state.worldSize / 1000)}k x ${Math.round(state.worldSize / 1000)}k`,
     leapReady: state.leapTimer > 0 ? "Jumping" : state.lilyBoostTimer > 0 ? "Ready" : `Lv ${state.leapUpgrade}`,
     pickaxeName: pickaxe.tier > 0 ? pickaxe.material : "None",
+    checkpointLabel: state.builtCheckpoint ? "Built" : `${CHECKPOINT_COST.pearls}P ${CHECKPOINT_COST.amber}A`,
+    hasCheckpoint: Boolean(state.builtCheckpoint),
     notice: state.notice,
     canInteract: Boolean(nearbyPlace),
     nearbyPlaceName: nearbyPlace?.name ?? "Shop",
     canMine: Boolean(findNearbyMineableWall(state)),
+    canBuildCheckpoint: state.pearls >= CHECKPOINT_COST.pearls && state.amber >= CHECKPOINT_COST.amber,
+    canTeleport: Boolean(state.builtCheckpoint),
   };
 }
