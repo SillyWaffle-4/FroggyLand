@@ -7,13 +7,27 @@ const FROG_SIZE = 42;
 const MOVE_SPEED = 270;
 const SWIM_SPEED_MULTIPLIER = 0.72;
 const LEAP_DURATION = 0.72;
-const LEAP_SPEED_MULTIPLIER = 1.45;
+const LEAP_SPEED_MULTIPLIER = 1.58;
+const MAX_LEAP_UPGRADE = 10;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
+const DAY_DURATION = 300;
+const NIGHT_DURATION = 660;
+const BIRD_INTERVAL = 60;
+const BIRD_WARNING = 8;
+const BIRD_SWOOP = 17;
 export const CHECKPOINT_COST = { pearls: 6, amber: 2 };
 export const HOUSE_COST = { flies: 8, pearls: 3, amber: 1 };
+export const LILY_PAD_COST = { flies: 3 };
 export const TOP_DOWN_ZOOM = 0.86;
+
+export const FURNITURE_SHOP_ITEMS = [
+  { part: "window", name: "Round Window", cost: { pearls: 4 } },
+  { part: "rug", name: "Leaf Rug", cost: { flies: 6, pearls: 2 } },
+  { part: "lantern", name: "Glow Lantern", cost: { amber: 2, pearls: 3 } },
+  { part: "trophy", name: "Parkour Trophy", cost: { amber: 5, pearls: 8 } },
+];
 
 export const PICKAXES = [
   { tier: 0, id: "none", name: "None", material: "bare hands", costPearls: 0, maxWallTier: 0, hits: Infinity },
@@ -33,6 +47,7 @@ const WALL_MATERIALS = {
 const URBAN_FEATURES = makeUrbanFeatures();
 
 export function createTopDownState(progress = {}) {
+  const saved = progress.topDown ?? {};
   const frog = { x: CENTER - 180, y: CENTER + 420, facing: 1, jumpHeld: false };
   const state = {
     worldSize: TOP_DOWN_WORLD_SIZE,
@@ -41,19 +56,36 @@ export function createTopDownState(progress = {}) {
     cameraX: 0,
     cameraY: 0,
     frog,
-    score: 8,
-    pearls: 3,
-    amber: 3,
-    pickaxeTier: 0,
-    leapUpgrade: 0,
+    score: saved.score ?? 8,
+    pearls: saved.pearls ?? 3,
+    amber: saved.amber ?? 3,
+    pickaxeTier: saved.pickaxeTier ?? 0,
+    leapUpgrade: saved.leapUpgrade ?? 0,
     leapTimer: 0,
     lilyBoostTimer: 0,
     discoveredStructures: new Set(),
     collectedPickups: new Set(),
     minedWalls: new Set(),
     wallDamage: new Map(),
-    builtCheckpoint: null,
+    checkpoints: (saved.checkpoints ?? []).map((checkpoint, index) => ({
+      id: checkpoint.id ?? `checkpoint-${index + 1}`,
+      x: checkpoint.x,
+      y: checkpoint.y,
+      label: checkpoint.label ?? `CP ${index + 1}`,
+      createdAt: checkpoint.createdAt ?? 0,
+    })),
+    teleportMenuOpen: false,
+    placedLilyPads: (saved.placedLilyPads ?? []).map((pad, index) => ({
+      id: pad.id ?? `placed-pad-${index + 1}`,
+      x: pad.x,
+      y: pad.y,
+      phase: pad.phase ?? 0,
+      placed: true,
+    })),
+    furnitureShopIndex: saved.furnitureShopIndex ?? 0,
     playerHouse: progress.house ? makePlayerHouse(progress.house.x, progress.house.y) : null,
+    bird: null,
+    birdCooldown: BIRD_INTERVAL,
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -64,6 +96,30 @@ export function createTopDownState(progress = {}) {
   updateCamera(state);
   state.active = getActiveTopDown(state);
   return state;
+}
+
+export function makeTopDownProgress(state) {
+  return {
+    score: state.score,
+    pearls: state.pearls,
+    amber: state.amber,
+    pickaxeTier: state.pickaxeTier,
+    leapUpgrade: state.leapUpgrade,
+    checkpoints: state.checkpoints.map((checkpoint) => ({
+      id: checkpoint.id,
+      x: checkpoint.x,
+      y: checkpoint.y,
+      label: checkpoint.label,
+      createdAt: checkpoint.createdAt,
+    })),
+    placedLilyPads: state.placedLilyPads.map((pad) => ({
+      id: pad.id,
+      x: pad.x,
+      y: pad.y,
+      phase: pad.phase,
+    })),
+    furnitureShopIndex: state.furnitureShopIndex,
+  };
 }
 
 export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
@@ -95,16 +151,19 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
   state.active = getActiveTopDown(state);
   collectTopDownPickups(state, soundOn);
   discoverStructures(state, soundOn);
+  updateBirdHazard(state, dt, soundOn);
   state.nearbyPlaceId = findNearbyTopDownPlace(state)?.id ?? null;
 
   if (state.noticeTimer <= 0) {
     const place = findNearbyTopDownPlace(state);
     if (place) {
-      state.notice = `${place.name}: ${place.talk}`;
+      state.notice = `${place.name}: ${place.talk ?? "Press E to enter a short parkour challenge."}`;
     } else if (onLilyPad || state.lilyBoostTimer > 0) {
       state.notice = "Press Space from a lily pad to leap over walls.";
+    } else if (getDayInfo(state).isDay) {
+      state.notice = "Daytime birds can steal your flies. Water keeps you safe.";
     } else {
-      state.notice = "Explore the 300k x 300k pondland. Water is common near walls, and the city hub sits in the middle.";
+      state.notice = "Night is long and safe. Explore, place pads, build checkpoints, and find parkour houses.";
     }
   }
 }
@@ -118,32 +177,79 @@ export function buildTopDownCheckpoint(state, soundOn) {
 
   state.pearls -= CHECKPOINT_COST.pearls;
   state.amber -= CHECKPOINT_COST.amber;
-  state.builtCheckpoint = {
+  const checkpoint = {
+    id: `checkpoint-${Math.round(state.time * 1000)}-${state.checkpoints.length + 1}`,
     x: state.frog.x,
     y: state.frog.y,
+    label: `CP ${state.checkpoints.length + 1}`,
     createdAt: state.time,
   };
-  setNotice(state, "Checkpoint built. Press T anytime to teleport back here.", 3.2);
+  state.checkpoints.push(checkpoint);
+  setNotice(state, `${checkpoint.label} built. Press T to open the checkpoint map.`, 3.2);
   if (soundOn) beep(1040, 0.07);
   return true;
 }
 
-export function teleportToTopDownCheckpoint(state, soundOn) {
-  if (!state.builtCheckpoint) {
+export function toggleTopDownTeleportMap(state, soundOn) {
+  if (!state.checkpoints.length) {
+    setNotice(state, "Build a checkpoint first with B.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+  state.teleportMenuOpen = !state.teleportMenuOpen;
+  setNotice(state, state.teleportMenuOpen ? "Checkpoint map open. Pick a marker to teleport." : "Checkpoint map closed.", 2);
+  if (soundOn) beep(state.teleportMenuOpen ? 720 : 420, 0.04);
+  return true;
+}
+
+export function teleportToTopDownCheckpoint(state, checkpointId, soundOn) {
+  const checkpoint = state.checkpoints.find((item) => item.id === checkpointId) ?? state.checkpoints[0];
+  if (!checkpoint) {
     setNotice(state, "Build a checkpoint first with B.");
     if (soundOn) beep(150, 0.04);
     return false;
   }
 
-  state.frog.x = clamp(state.builtCheckpoint.x, 28, state.worldSize - 28);
-  state.frog.y = clamp(state.builtCheckpoint.y, 36, state.worldSize - 36);
+  state.frog.x = clamp(checkpoint.x, 28, state.worldSize - 28);
+  state.frog.y = clamp(checkpoint.y, 36, state.worldSize - 36);
   state.leapTimer = 0;
   state.lilyBoostTimer = 0;
   state.frog.jumpHeld = false;
+  state.teleportMenuOpen = false;
   updateCamera(state);
   state.active = getActiveTopDown(state);
-  setNotice(state, "Teleported to your checkpoint.", 2.2);
+  setNotice(state, `Teleported to ${checkpoint.label}.`, 2.2);
   if (soundOn) beep(880, 0.06);
+  return true;
+}
+
+export function placeTopDownLilyPad(state, soundOn) {
+  if (state.score < LILY_PAD_COST.flies) {
+    setNotice(state, `A lily pad costs ${LILY_PAD_COST.flies} flies.`);
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  const newPad = {
+    id: `placed-top-pad-${Math.round(state.time * 1000)}-${state.placedLilyPads.length + 1}`,
+    x: state.frog.x,
+    y: state.frog.y,
+    phase: Math.random() * Math.PI * 2,
+    placed: true,
+  };
+  const tooClose = state.active.lilyPads.some((pad) => (
+    Math.hypot(pad.x - newPad.x, pad.y - newPad.y) < 68
+  ));
+  if (tooClose) {
+    setNotice(state, "That spot is too close to another lily pad.");
+    return false;
+  }
+
+  state.score -= LILY_PAD_COST.flies;
+  state.placedLilyPads.push(newPad);
+  state.active.lilyPads.push(newPad);
+  setNotice(state, "Lily pad placed. Stand on it and press Space to leap.", 2.6);
+  if (soundOn) beep(760, 0.05);
   return true;
 }
 
@@ -154,7 +260,8 @@ function moveTopDownFrog(state, pressed, dt) {
   const length = Math.sqrt(dx * dx + dy * dy) || 1;
   const inWater = isInWater(state);
   const leaping = state.leapTimer > 0;
-  const speed = MOVE_SPEED * (inWater && !leaping ? SWIM_SPEED_MULTIPLIER : 1) * (leaping ? LEAP_SPEED_MULTIPLIER : 1);
+  const leapSpeed = LEAP_SPEED_MULTIPLIER + state.leapUpgrade * 0.08;
+  const speed = MOVE_SPEED * (inWater && !leaping ? SWIM_SPEED_MULTIPLIER : 1) * (leaping ? leapSpeed : 1);
 
   frog.x = clamp(frog.x + (dx / length) * speed * dt, 28, state.worldSize - 28);
   frog.y = clamp(frog.y + (dy / length) * speed * dt, 36, state.worldSize - 36);
@@ -203,6 +310,7 @@ function getActiveTopDown(state) {
   active.parks.push(...URBAN_FEATURES.parks.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.water.push(...URBAN_FEATURES.water.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.lilyPads.push(...URBAN_FEATURES.lilyPads.filter((item) => isVisible({ x: item.x - 28, y: item.y - 18, w: 56, h: 36 }, minX, minY, maxX, maxY)));
+  active.lilyPads.push(...state.placedLilyPads.filter((item) => isVisible({ x: item.x - 38, y: item.y - 26, w: 76, h: 52 }, minX, minY, maxX, maxY)));
   active.walls.push(...URBAN_FEATURES.walls.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.structures.push(...URBAN_FEATURES.structures.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.pickups.push(...URBAN_FEATURES.pickups.filter((item) => isVisible({ x: item.x - 16, y: item.y - 16, w: 32, h: 32 }, minX, minY, maxX, maxY)));
@@ -322,6 +430,78 @@ function isOnLilyPad(state) {
   ));
 }
 
+export function getDayInfo(state) {
+  const cycleLength = DAY_DURATION + NIGHT_DURATION;
+  const cycleTime = state.time % cycleLength;
+  const isDay = cycleTime < DAY_DURATION;
+  const remaining = isDay ? DAY_DURATION - cycleTime : cycleLength - cycleTime;
+  return {
+    isDay,
+    phase: isDay ? "Day" : "Night",
+    remaining,
+    label: `${isDay ? "Day" : "Night"} ${formatTime(remaining)}`,
+  };
+}
+
+function updateBirdHazard(state, dt, soundOn) {
+  const dayInfo = getDayInfo(state);
+  if (!dayInfo.isDay) {
+    state.bird = null;
+    state.birdCooldown = BIRD_INTERVAL;
+    return;
+  }
+
+  if (!state.bird) {
+    state.birdCooldown -= dt;
+    if (state.birdCooldown <= 0) {
+      state.bird = spawnBird(state);
+      setNotice(state, "A bird is circling. Get into water before it dives.", BIRD_WARNING + 1);
+      if (soundOn) beep(260, 0.08);
+    }
+    return;
+  }
+
+  const bird = state.bird;
+  bird.age += dt;
+  if (bird.age < BIRD_WARNING) {
+    bird.targetX = state.frog.x;
+    bird.targetY = state.frog.y;
+    return;
+  }
+
+  const progress = clamp((bird.age - BIRD_WARNING) / BIRD_SWOOP, 0, 1);
+  const eased = progress * progress * (3 - 2 * progress);
+  bird.x = bird.startX + (bird.targetX - bird.startX) * eased;
+  bird.y = bird.startY + (bird.targetY - bird.startY) * eased;
+  const distance = Math.hypot(state.frog.x - bird.x, state.frog.y - bird.y);
+
+  if (distance < 72 || progress >= 1) {
+    if (isInWater(state)) {
+      setNotice(state, "The bird missed. Water kept you safe.", 2.6);
+      if (soundOn) beep(680, 0.05);
+    } else {
+      state.score = 0;
+      setNotice(state, "A bird got you and stole all your flies. Water is the safe zone.", 3.4);
+      if (soundOn) beep(120, 0.1);
+    }
+    state.bird = null;
+    state.birdCooldown = BIRD_INTERVAL + Math.random() * 14;
+  }
+}
+
+function spawnBird(state) {
+  const fromLeft = Math.random() > 0.5;
+  return {
+    age: 0,
+    startX: state.cameraX + (fromLeft ? -260 : viewportWidth(state) + 260),
+    startY: state.cameraY - 190,
+    targetX: state.frog.x,
+    targetY: state.frog.y,
+    x: state.frog.x,
+    y: state.frog.y,
+  };
+}
+
 function collectTopDownPickups(state, soundOn) {
   const rect = frogRect(state, 2);
   for (const pickup of state.active.pickups) {
@@ -361,9 +541,12 @@ export function findNearbyTopDownPlace(state) {
 }
 
 function getTopDownPlaces(state) {
-  return state.playerHouse
-    ? [...URBAN_FEATURES.places, state.playerHouse]
-    : URBAN_FEATURES.places;
+  const activePlaces = state.active.structures.filter((item) => item.kind === "parkour" || item.kind === "playerHouse");
+  const places = [...URBAN_FEATURES.places, ...activePlaces];
+  if (state.playerHouse && !places.some((place) => place.id === state.playerHouse.id)) {
+    places.push(state.playerHouse);
+  }
+  return places;
 }
 
 export function getCurrentPickaxe(state) {
@@ -398,9 +581,9 @@ export function interactTopDownPlace(state, soundOn) {
   }
 
   if (place.kind === "parkour") {
-    setNotice(state, "Entering Parkour Village House. Clear platformer routes to earn house parts.", 2);
+    setNotice(state, "Entering a short platformer parkour house. Clear it to earn a part.", 2);
     if (soundOn) beep(900, 0.06);
-    return { mode: "platformer", entry: "parkourVillage" };
+    return { mode: "platformer", entry: `parkour:${place.id}` };
   }
 
   if (place.kind === "playerHouse") {
@@ -415,7 +598,7 @@ export function interactTopDownPlace(state, soundOn) {
       if (soundOn) beep(160, 0.04);
       return false;
     }
-    if (state.leapUpgrade >= 3) {
+    if (state.leapUpgrade >= MAX_LEAP_UPGRADE) {
       setNotice(state, "Your lily leap is already fully upgraded.");
       return false;
     }
@@ -425,6 +608,20 @@ export function interactTopDownPlace(state, soundOn) {
     setNotice(state, `Lily leap upgraded to level ${state.leapUpgrade}.`);
     if (soundOn) beep(980, 0.06);
     return true;
+  }
+
+  if (place.kind === "furniture") {
+    const item = FURNITURE_SHOP_ITEMS[state.furnitureShopIndex % FURNITURE_SHOP_ITEMS.length];
+    if (!canAffordCost(state, item.cost)) {
+      setNotice(state, `Furniture Shop wants ${costLabel(item.cost)} for ${item.name}.`);
+      if (soundOn) beep(160, 0.04);
+      return false;
+    }
+    spendCost(state, item.cost);
+    state.furnitureShopIndex += 1;
+    setNotice(state, `Bought ${item.name}. Place it inside your house.`);
+    if (soundOn) beep(900, 0.05);
+    return { furnitureReward: { part: item.part, name: item.name, amount: 1 } };
   }
 
   if (place.kind === "pickaxe") {
@@ -533,39 +730,49 @@ export function drawTopDownGame(ctx, state) {
   drawLilyPads(ctx, state);
   drawWalls(ctx, state);
   drawStructures(ctx, state);
-  drawBuiltCheckpoint(ctx, state);
+  drawCheckpoints(ctx, state);
   drawTopDownPickups(ctx, state);
+  drawBird(ctx, state);
   drawFrog(ctx, state);
   ctx.restore();
+  drawDayNightOverlay(ctx, state);
 }
 
-function drawBuiltCheckpoint(ctx, state) {
-  if (!state.builtCheckpoint) return;
-  const checkpoint = state.builtCheckpoint;
-  const pulse = 1 + Math.sin(state.time * 4) * 0.08;
-  ctx.save();
-  ctx.translate(checkpoint.x, checkpoint.y);
-  ctx.fillStyle = "rgba(255, 223, 93, 0.3)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#ffdf5d";
-  roundRect(ctx, -16, -34, 32, 48, 7);
-  ctx.fill();
-  ctx.fillStyle = "#2f7d46";
-  ctx.beginPath();
-  ctx.moveTo(0, -52);
-  ctx.lineTo(34, -35);
-  ctx.lineTo(0, -18);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "#173820";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(0, -34);
-  ctx.lineTo(0, 24);
-  ctx.stroke();
-  ctx.restore();
+function drawCheckpoints(ctx, state) {
+  for (const checkpoint of state.checkpoints) {
+    const visible = isVisible({ x: checkpoint.x - 60, y: checkpoint.y - 70, w: 120, h: 120 }, state.cameraX - ACTIVE_MARGIN, state.cameraY - ACTIVE_MARGIN, state.cameraX + viewportWidth(state) + ACTIVE_MARGIN, state.cameraY + viewportHeight(state) + ACTIVE_MARGIN);
+    if (!visible) continue;
+    const pulse = 1 + Math.sin(state.time * 4 + checkpoint.createdAt) * 0.08;
+    ctx.save();
+    ctx.translate(checkpoint.x, checkpoint.y);
+    ctx.fillStyle = state.teleportMenuOpen ? "rgba(255, 223, 93, 0.42)" : "rgba(255, 223, 93, 0.26)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffdf5d";
+    roundRect(ctx, -16, -34, 32, 48, 7);
+    ctx.fill();
+    ctx.fillStyle = "#2f7d46";
+    ctx.beginPath();
+    ctx.moveTo(0, -52);
+    ctx.lineTo(34, -35);
+    ctx.lineTo(0, -18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#173820";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, -34);
+    ctx.lineTo(0, 24);
+    ctx.stroke();
+    if (state.teleportMenuOpen) {
+      ctx.fillStyle = "#173820";
+      ctx.font = "900 18px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(checkpoint.label, 0, -66);
+    }
+    ctx.restore();
+  }
 }
 
 function drawGround(ctx, state) {
@@ -580,6 +787,60 @@ function drawGround(ctx, state) {
       ctx.ellipse(x, y, 38, 10, -0.15, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+function drawBird(ctx, state) {
+  if (!state.bird) return;
+  const bird = state.bird;
+  const warning = bird.age < BIRD_WARNING;
+  const x = warning ? bird.targetX : bird.x;
+  const y = warning ? bird.targetY : bird.y;
+  ctx.save();
+  if (warning) {
+    const pulse = 1 + Math.sin(state.time * 7) * 0.08;
+    ctx.strokeStyle = "rgba(180, 54, 47, 0.72)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(x, y, 92 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(180, 54, 47, 0.12)";
+    ctx.beginPath();
+    ctx.arc(x, y, 92 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.translate(x, y);
+    ctx.rotate(Math.sin(state.time * 3) * 0.1);
+    ctx.fillStyle = "#2f3532";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 34, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#3f4944";
+    ctx.beginPath();
+    ctx.ellipse(-38, 0, 58, 14, -0.28, 0, Math.PI * 2);
+    ctx.ellipse(38, 0, 58, 14, 0.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c98631";
+    ctx.beginPath();
+    ctx.moveTo(31, -2);
+    ctx.lineTo(52, 5);
+    ctx.lineTo(31, 12);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawDayNightOverlay(ctx, state) {
+  const dayInfo = getDayInfo(state);
+  if (!dayInfo.isDay) {
+    ctx.fillStyle = "rgba(19, 28, 62, 0.28)";
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    return;
+  }
+  if (state.bird) {
+    ctx.fillStyle = "rgba(255, 210, 72, 0.08)";
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   }
 }
 
@@ -662,12 +923,12 @@ function drawWalls(ctx, state) {
 function drawLilyPads(ctx, state) {
   for (const pad of state.active.lilyPads) {
     const bob = Math.sin(state.time * 3 + pad.phase) * 2;
-    ctx.fillStyle = "#73c957";
+    ctx.fillStyle = pad.placed ? "#8bdc4e" : "#73c957";
     ctx.beginPath();
     ctx.ellipse(pad.x, pad.y + bob, 32, 19, -0.15, 0.22, Math.PI * 2.05);
     ctx.lineTo(pad.x, pad.y + bob);
     ctx.fill();
-    ctx.strokeStyle = "#dff56d";
+    ctx.strokeStyle = pad.placed ? "#ffdf5d" : "#dff56d";
     ctx.lineWidth = 3;
     ctx.stroke();
   }
@@ -685,6 +946,8 @@ function drawStructures(ctx, state) {
       drawShop(ctx, item, "#6f7b75", "PX");
     } else if (item.type === "tradePost") {
       drawShop(ctx, item, "#d58432", "TR");
+    } else if (item.type === "furnitureShop") {
+      drawShop(ctx, item, "#2d9eb4", "FS");
     } else if (item.type === "parkourHouse") {
       drawHousePortal(ctx, item, "#5fcb55", "PK");
     } else if (item.type === "playerHouse") {
@@ -867,7 +1130,7 @@ function makeUrbanFeatures() {
       w: 190,
       h: 130,
       fixed: true,
-      talk: "Press E to buy stronger lily leaps for 3 amber and 2 pearls.",
+      talk: "Press E to buy stronger lily leaps. There are 10 upgrade levels.",
     },
     {
       id: "pickaxe-shop",
@@ -894,6 +1157,18 @@ function makeUrbanFeatures() {
       talk: "Press E to trade 4 flies for 1 amber and 1 pearl.",
     },
     {
+      id: "furniture-shop",
+      type: "furnitureShop",
+      name: "Furniture Shop",
+      kind: "furniture",
+      x: cx + 620,
+      y: cy + 285,
+      w: 190,
+      h: 130,
+      fixed: true,
+      talk: "Press E to buy rotating furniture for your house interior.",
+    },
+    {
       id: "parkour-village-house",
       type: "parkourHouse",
       name: "Parkour Village House",
@@ -904,6 +1179,30 @@ function makeUrbanFeatures() {
       h: 120,
       fixed: true,
       talk: "Press E to enter a platformer challenge and earn house parts.",
+    },
+    {
+      id: "canal-parkour-house",
+      type: "parkourHouse",
+      name: "Canal Parkour House",
+      kind: "parkour",
+      x: cx + 690,
+      y: cy - 30,
+      w: 170,
+      h: 120,
+      fixed: true,
+      talk: "Press E for a quick platformer challenge with a house reward.",
+    },
+    {
+      id: "garden-parkour-house",
+      type: "parkourHouse",
+      name: "Garden Parkour House",
+      kind: "parkour",
+      x: cx - 360,
+      y: cy + 390,
+      w: 170,
+      h: 120,
+      fixed: true,
+      talk: "Press E to clear a short parkour section for furniture.",
     },
   ];
   const buildings = [
@@ -973,13 +1272,43 @@ function addCurrency(state, currency, amount) {
   else state.score += amount;
 }
 
+function canAffordCost(state, cost) {
+  return (
+    state.score >= (cost.flies ?? 0) &&
+    state.pearls >= (cost.pearls ?? 0) &&
+    state.amber >= (cost.amber ?? 0)
+  );
+}
+
+function spendCost(state, cost) {
+  state.score -= cost.flies ?? 0;
+  state.pearls -= cost.pearls ?? 0;
+  state.amber -= cost.amber ?? 0;
+}
+
+function costLabel(cost) {
+  return [
+    cost.flies ? `${cost.flies} flies` : "",
+    cost.pearls ? `${cost.pearls} pearls` : "",
+    cost.amber ? `${cost.amber} amber` : "",
+  ].filter(Boolean).join(" and ");
+}
+
 function currencyLabel(currency) {
   if (currency === "pearls") return "moon pearls";
   if (currency === "amber") return "amber coins";
   return "flies";
 }
 
+function formatTime(seconds) {
+  const whole = Math.max(0, Math.ceil(seconds));
+  const minutes = Math.floor(whole / 60);
+  const rest = whole % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
 function structureName(type) {
+  if (type === "parkourHouse") return "parkour house";
   if (type === "brokenArch") return "broken arch";
   if (type === "stoneNest") return "stone nest";
   if (type === "marketStall") return "market stall";

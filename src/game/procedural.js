@@ -201,16 +201,18 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   }
 
   if (next() > 0.35) {
-    const type = ["hut", "ruin", "garden", "cart"][Math.floor(next() * 4)];
+    const type = ["hut", "ruin", "garden", "cart", "parkourHouse"][Math.floor(next() * 5)];
     const w = type === "garden" ? 136 : 76 + Math.floor(next() * 58);
     const h = type === "garden" ? 106 : 64 + Math.floor(next() * 54);
     structures.push({
       id: `structure-${chunkX}-${chunkY}`,
       type,
+      name: type === "parkourHouse" ? "Parkour House" : undefined,
+      kind: type === "parkourHouse" ? "parkour" : undefined,
       x: clampToWorld(baseX + 150 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 300)), w),
       y: clampToWorld(baseY + 150 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 300)), h),
-      w,
-      h,
+      w: type === "parkourHouse" ? Math.max(128, w) : w,
+      h: type === "parkourHouse" ? Math.max(96, h) : h,
       color: next() > 0.45 ? "#b98d55" : "#789e6b",
     });
   }

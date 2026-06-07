@@ -2,16 +2,22 @@ import React from "react";
 import { MAX_DT, TARGET_FRAME_MS, VIEW_HEIGHT, VIEW_WIDTH, keys } from "./game/constants.js";
 import {
   CHECKPOINT_COST,
+  FURNITURE_SHOP_ITEMS,
   HOUSE_COST,
+  LILY_PAD_COST,
   buildTopDownCheckpoint,
   buildTopDownHouse,
   createTopDownState,
   drawTopDownGame,
   findNearbyMineableWall,
   findNearbyTopDownPlace,
+  getDayInfo,
   getCurrentPickaxe,
   interactTopDownPlace,
+  makeTopDownProgress,
   mineNearbyWall,
+  placeTopDownLilyPad,
+  toggleTopDownTeleportMap,
   teleportToTopDownCheckpoint,
   updateTopDownGame,
 } from "./game/topDownMode.js";
@@ -29,21 +35,37 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
     soundOnRef.current = soundOn;
   }, [soundOn]);
 
+  const syncTopDownProgress = React.useCallback(() => {
+    onProgressChange?.({ topDown: makeTopDownProgress(stateRef.current) });
+  }, [onProgressChange]);
+
   const handleInteract = React.useCallback(() => {
     const result = interactTopDownPlace(stateRef.current, soundOnRef.current);
+    if (result?.furnitureReward) {
+      onProgressChange?.((current) => ({
+        topDown: makeTopDownProgress(stateRef.current),
+        houseParts: {
+          [result.furnitureReward.part]: (current.houseParts?.[result.furnitureReward.part] ?? 0) + result.furnitureReward.amount,
+        },
+      }));
+    } else {
+      syncTopDownProgress();
+    }
     setHud(makeTopDownHud(stateRef.current));
     if (result?.mode === "platformer") {
       onEnterPlatformer?.(result.entry);
     }
-  }, [onEnterPlatformer]);
+  }, [onEnterPlatformer, onProgressChange, syncTopDownProgress]);
 
   const handleBuildHouse = React.useCallback(() => {
     const house = buildTopDownHouse(stateRef.current, soundOnRef.current);
     if (house) {
-      onProgressChange?.({ house });
+      onProgressChange?.({ house, topDown: makeTopDownProgress(stateRef.current) });
+    } else {
+      syncTopDownProgress();
     }
     setHud(makeTopDownHud(stateRef.current));
-  }, [onProgressChange]);
+  }, [onProgressChange, syncTopDownProgress]);
 
   React.useEffect(() => {
     const onKeyDown = (event) => {
@@ -58,6 +80,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
         event.preventDefault();
         if (!event.repeat) {
           mineNearbyWall(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
           setHud(makeTopDownHud(stateRef.current));
         }
         return;
@@ -73,6 +96,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
         event.preventDefault();
         if (!event.repeat) {
           buildTopDownCheckpoint(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
           setHud(makeTopDownHud(stateRef.current));
         }
         return;
@@ -80,7 +104,17 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
       if (event.code === "KeyT") {
         event.preventDefault();
         if (!event.repeat) {
-          teleportToTopDownCheckpoint(stateRef.current, soundOnRef.current);
+          toggleTopDownTeleportMap(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyL") {
+        event.preventDefault();
+        if (!event.repeat) {
+          placeTopDownLilyPad(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
           setHud(makeTopDownHud(stateRef.current));
         }
         return;
@@ -97,7 +131,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [handleBuildHouse, handleInteract]);
+  }, [handleBuildHouse, handleInteract, syncTopDownProgress]);
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -120,6 +154,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
     let last = performance.now();
     let lastFrame = last;
     let hudTimer = 0;
+    let saveTimer = 0;
     let lastHudKey = "";
 
     const tick = (now) => {
@@ -140,6 +175,11 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
       drawTopDownGame(context, stateRef.current);
 
       hudTimer += dt;
+      saveTimer += dt;
+      if (saveTimer > 1) {
+        saveTimer = 0;
+        syncTopDownProgress();
+      }
       if (hudTimer > 0.18) {
         hudTimer = 0;
         const nextHud = makeTopDownHud(stateRef.current);
@@ -154,7 +194,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, []);
+  }, [syncTopDownProgress]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -208,9 +248,12 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
           <div><span>Leap</span><strong>{hud.leapReady}</strong></div>
           <div><span>Pickaxe</span><strong>{hud.pickaxeName}</strong></div>
           <div><span>Checkpoint</span><strong>{hud.checkpointLabel}</strong></div>
+          <div><span>Pads</span><strong>{hud.placedPads}</strong></div>
+          <div><span>Cycle</span><strong>{hud.dayLabel}</strong></div>
+          <div><span>Bird</span><strong>{hud.birdLabel}</strong></div>
           <div><span>Map</span><strong>{hud.mapSize}</strong></div>
         </div>
-        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint || hud.canBuildHouse) && (
+        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint || hud.canBuildHouse || hud.canPlaceLilyPad) && (
           <div className="action-grid">
             {hud.canInteract && (
               <button
@@ -239,10 +282,11 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
                 className="panel-button"
                 onClick={() => {
                   buildTopDownCheckpoint(stateRef.current, soundOnRef.current);
+                  syncTopDownProgress();
                   setHud(makeTopDownHud(stateRef.current));
                 }}
               >
-                {hud.hasCheckpoint ? "Move Checkpoint" : "Build Checkpoint"}
+                Build Checkpoint
               </button>
             )}
             {hud.canTeleport && (
@@ -250,11 +294,25 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
                 type="button"
                 className="panel-button"
                 onClick={() => {
-                  teleportToTopDownCheckpoint(stateRef.current, soundOnRef.current);
+                  toggleTopDownTeleportMap(stateRef.current, soundOnRef.current);
+                  syncTopDownProgress();
                   setHud(makeTopDownHud(stateRef.current));
                 }}
               >
-                Teleport
+                {hud.teleportMenuOpen ? "Close Map" : "Teleport"}
+              </button>
+            )}
+            {hud.canPlaceLilyPad && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={() => {
+                  placeTopDownLilyPad(stateRef.current, soundOnRef.current);
+                  syncTopDownProgress();
+                  setHud(makeTopDownHud(stateRef.current));
+                }}
+              >
+                Place Lily Pad
               </button>
             )}
             {hud.canBuildHouse && (
@@ -268,14 +326,54 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
             )}
           </div>
         )}
+        {hud.teleportMenuOpen && (
+          <div className="teleport-panel" aria-label="Checkpoint map">
+            <div className="teleport-map">
+              {hud.checkpoints.map((checkpoint) => (
+                <button
+                  key={checkpoint.id}
+                  type="button"
+                  className="teleport-dot"
+                  style={{ left: `${checkpoint.mapX}%`, top: `${checkpoint.mapY}%` }}
+                  onClick={() => {
+                    teleportToTopDownCheckpoint(stateRef.current, checkpoint.id, soundOnRef.current);
+                    syncTopDownProgress();
+                    setHud(makeTopDownHud(stateRef.current));
+                  }}
+                  aria-label={`Teleport to ${checkpoint.label}`}
+                  title={`Teleport to ${checkpoint.label}`}
+                >
+                  {checkpoint.index}
+                </button>
+              ))}
+            </div>
+            <div className="checkpoint-list">
+              {hud.checkpoints.map((checkpoint) => (
+                <button
+                  key={checkpoint.id}
+                  type="button"
+                  className="panel-button"
+                  onClick={() => {
+                    teleportToTopDownCheckpoint(stateRef.current, checkpoint.id, soundOnRef.current);
+                    syncTopDownProgress();
+                    setHud(makeTopDownHud(stateRef.current));
+                  }}
+                >
+                  {checkpoint.label} {checkpoint.coords}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="notice">{hud.notice}</p>
         <div className="control-list" aria-label="Top-down controls">
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span>
           <span><kbd>Space</kbd> Lily leap</span>
           {hud.canInteract && <span><kbd>E</kbd> Shop</span>}
           <span><kbd>B</kbd> Build checkpoint</span>
+          <span><kbd>T</kbd> Checkpoint map</span>
+          <span><kbd>L</kbd> Place lily pad</span>
           {!hud.hasHouse && <span><kbd>H</kbd> Build house</span>}
-          {hud.canTeleport && <span><kbd>T</kbd> Teleport</span>}
           <span><kbd>M</kbd> Mine</span>
         </div>
       </aside>
@@ -286,6 +384,8 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
 function makeTopDownHud(state) {
   const nearbyPlace = findNearbyTopDownPlace(state);
   const pickaxe = getCurrentPickaxe(state);
+  const dayInfo = getDayInfo(state);
+  const nextFurniture = FURNITURE_SHOP_ITEMS[state.furnitureShopIndex % FURNITURE_SHOP_ITEMS.length];
   return {
     score: state.score,
     pearls: state.pearls,
@@ -294,15 +394,28 @@ function makeTopDownHud(state) {
     mapSize: `${Math.round(state.worldSize / 1000)}k x ${Math.round(state.worldSize / 1000)}k`,
     leapReady: state.leapTimer > 0 ? "Jumping" : state.lilyBoostTimer > 0 ? "Ready" : `Lv ${state.leapUpgrade}`,
     pickaxeName: pickaxe.tier > 0 ? pickaxe.material : "None",
-    checkpointLabel: state.builtCheckpoint ? "Built" : `${CHECKPOINT_COST.pearls}P ${CHECKPOINT_COST.amber}A`,
-    hasCheckpoint: Boolean(state.builtCheckpoint),
+    checkpointLabel: state.checkpoints.length ? `${state.checkpoints.length}` : `${CHECKPOINT_COST.pearls}P ${CHECKPOINT_COST.amber}A`,
+    hasCheckpoint: state.checkpoints.length > 0,
+    checkpoints: state.checkpoints.map((checkpoint, index) => ({
+      id: checkpoint.id,
+      label: checkpoint.label,
+      index: index + 1,
+      coords: `${Math.round(checkpoint.x / 1000)}k, ${Math.round(checkpoint.y / 1000)}k`,
+      mapX: Math.max(3, Math.min(97, (checkpoint.x / state.worldSize) * 100)),
+      mapY: Math.max(3, Math.min(97, (checkpoint.y / state.worldSize) * 100)),
+    })),
+    teleportMenuOpen: state.teleportMenuOpen,
+    placedPads: state.placedLilyPads.length,
+    dayLabel: dayInfo.label,
+    birdLabel: !dayInfo.isDay ? "Safe" : state.bird ? "Hide" : `${Math.ceil(state.birdCooldown)}s`,
     hasHouse: Boolean(state.playerHouse),
     notice: state.notice,
     canInteract: Boolean(nearbyPlace),
-    nearbyPlaceName: nearbyPlace?.name ?? "Shop",
+    nearbyPlaceName: nearbyPlace?.kind === "furniture" ? `${nearbyPlace.name} (${nextFurniture.name})` : nearbyPlace?.name ?? "Shop",
     canMine: Boolean(findNearbyMineableWall(state)),
     canBuildCheckpoint: state.pearls >= CHECKPOINT_COST.pearls && state.amber >= CHECKPOINT_COST.amber,
-    canTeleport: Boolean(state.builtCheckpoint),
+    canTeleport: state.checkpoints.length > 0,
+    canPlaceLilyPad: state.score >= LILY_PAD_COST.flies,
     canBuildHouse: !state.playerHouse && state.score >= HOUSE_COST.flies && state.pearls >= HOUSE_COST.pearls && state.amber >= HOUSE_COST.amber,
   };
 }

@@ -19,12 +19,7 @@ const HOUSE_PARTS = [
   { id: "trophy", name: "Parkour Trophy" },
 ];
 
-const PARKOUR_REWARDS = [
-  { id: "parkour-window", x: 1540, part: "window", amount: 1, name: "Round Window" },
-  { id: "parkour-rug", x: 2780, part: "rug", amount: 1, name: "Leaf Rug" },
-  { id: "parkour-lantern", x: 4300, part: "lantern", amount: 1, name: "Glow Lantern" },
-  { id: "parkour-trophy", x: 6200, part: "trophy", amount: 1, name: "Parkour Trophy" },
-];
+const PARKOUR_GOAL_X = 1880;
 
 const EMPTY_PROGRESS = {
   houseParts: {},
@@ -40,14 +35,15 @@ export function FrogGame(props) {
 }
 
 function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
+  const isParkourEntry = entry.startsWith("parkour");
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
   const progressRef = React.useRef(progress);
   const stateRef = React.useRef(null);
   if (!stateRef.current) {
     stateRef.current = createInitialState();
-    if (entry === "parkourVillage") {
-      stateRef.current.notice = "Parkour Village House: reach marked routes to earn house parts.";
+    if (isParkourEntry) {
+      stateRef.current.notice = "Parkour House: clear the short section to earn one furniture part.";
       stateRef.current.noticeTimer = 4;
     }
   }
@@ -134,8 +130,8 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       last = now;
       lastFrame = now;
       updateGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
-      if (entry === "parkourVillage") {
-        grantParkourReward(stateRef.current, progressRef.current, onProgressChange);
+      if (isParkourEntry) {
+        grantParkourReward(stateRef.current, entry, progressRef.current, onProgressChange);
       }
       drawGame(context, stateRef.current);
 
@@ -281,10 +277,11 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
 }
 
 function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
+  const isParkourEntry = entry.startsWith("parkour");
   const nearbyNpc = findNearbyNpc(state);
   const partTotal = Object.values(progress.houseParts ?? {}).reduce((total, value) => total + value, 0);
   return {
-    regionName: entry === "parkourVillage" ? "Parkour Village House" : state.regionName,
+    regionName: isParkourEntry ? "Parkour House" : state.regionName,
     score: state.score,
     lilyPads: state.lilyPads,
     pearls: state.pearls,
@@ -303,9 +300,12 @@ function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
   };
 }
 
-function grantParkourReward(state, progress, onProgressChange) {
-  const reward = PARKOUR_REWARDS.find((item) => state.frog.x >= item.x && !progress.rewards?.[item.id]);
-  if (!reward) return;
+function grantParkourReward(state, entry, progress, onProgressChange) {
+  const reward = getParkourReward(entry);
+  if (state.parkourRewarded || state.frog.x < PARKOUR_GOAL_X || progress.rewards?.[reward.id]) {
+    return;
+  }
+  state.parkourRewarded = true;
   onProgressChange?.((current) => ({
     houseParts: {
       [reward.part]: (current.houseParts?.[reward.part] ?? 0) + reward.amount,
@@ -316,6 +316,18 @@ function grantParkourReward(state, progress, onProgressChange) {
   }));
   state.notice = `Platformer reward earned: ${reward.name}.`;
   state.noticeTimer = 3.4;
+}
+
+function getParkourReward(entry) {
+  const challengeId = entry.replace(/^parkour:?/, "") || "village";
+  const total = [...challengeId].reduce((sum, letter) => sum + letter.charCodeAt(0), 0);
+  const part = HOUSE_PARTS[total % HOUSE_PARTS.length];
+  return {
+    id: `parkour-${challengeId}`,
+    part: part.id,
+    amount: 1,
+    name: part.name,
+  };
 }
 
 function HouseInteriorEditor({ progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {

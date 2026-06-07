@@ -7,6 +7,16 @@ import { TopDownGame } from "./TopDownGame.jsx";
 
 const STARTING_PROGRESS = {
   house: null,
+  topDown: {
+    score: 8,
+    pearls: 3,
+    amber: 3,
+    pickaxeTier: 0,
+    leapUpgrade: 0,
+    checkpoints: [],
+    placedLilyPads: [],
+    furnitureShopIndex: 0,
+  },
   houseParts: {
     window: 0,
     rug: 0,
@@ -22,12 +32,29 @@ const STARTING_PROGRESS = {
   rewards: {},
 };
 
+function loadProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("froggyland-progress") ?? "null");
+    if (!saved || typeof saved !== "object") return STARTING_PROGRESS;
+    return {
+      ...STARTING_PROGRESS,
+      ...saved,
+      topDown: { ...STARTING_PROGRESS.topDown, ...(saved.topDown ?? {}) },
+      houseParts: { ...STARTING_PROGRESS.houseParts, ...(saved.houseParts ?? {}) },
+      placedInterior: { ...STARTING_PROGRESS.placedInterior, ...(saved.placedInterior ?? {}) },
+      rewards: { ...STARTING_PROGRESS.rewards, ...(saved.rewards ?? {}) },
+    };
+  } catch {
+    return STARTING_PROGRESS;
+  }
+}
+
 function App() {
   const [runId, setRunId] = React.useState(1);
   const [soundOn, setSoundOn] = React.useState(false);
   const [mode, setMode] = React.useState(null);
   const [platformerEntry, setPlatformerEntry] = React.useState("openMap");
-  const [progress, setProgress] = React.useState(STARTING_PROGRESS);
+  const [progress, setProgress] = React.useState(loadProgress);
 
   const updateProgress = React.useCallback((updater) => {
     setProgress((current) => {
@@ -35,12 +62,17 @@ function App() {
       return {
         ...current,
         ...next,
+        topDown: { ...current.topDown, ...(next.topDown ?? {}) },
         houseParts: { ...current.houseParts, ...(next.houseParts ?? {}) },
         placedInterior: { ...current.placedInterior, ...(next.placedInterior ?? {}) },
         rewards: { ...current.rewards, ...(next.rewards ?? {}) },
       };
     });
   }, []);
+
+  React.useEffect(() => {
+    localStorage.setItem("froggyland-progress", JSON.stringify(progress));
+  }, [progress]);
 
   const enterPlatformer = React.useCallback((entry = "openMap") => {
     setPlatformerEntry(entry);

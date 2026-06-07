@@ -530,6 +530,10 @@ canvas:focus-visible {
   padding: 8px 10px;
 }
 
+.play-shell .teleport-panel {
+  grid-column: 1 / -1;
+}
+
 .play-shell .control-list {
   grid-column: 1 / -1;
   grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
@@ -670,6 +674,60 @@ canvas:focus-visible {
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.teleport-panel {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.75fr) minmax(180px, 1fr);
+  gap: 8px;
+}
+
+.teleport-map {
+  position: relative;
+  min-height: 136px;
+  border: 1px solid rgba(31, 72, 50, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(0deg, rgba(255, 255, 255, 0.26) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(135deg, #bfe7c0, #83cba1 55%, #58a8b8);
+}
+
+.teleport-map::after {
+  content: "";
+  position: absolute;
+  inset: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #173820;
+  transform: translate(-50%, -50%);
+}
+
+.teleport-dot {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #173820;
+  border-radius: 50%;
+  background: #ffdf5d;
+  color: #173820;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 6px 14px rgba(19, 36, 26, 0.18);
+}
+
+.checkpoint-list {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  max-height: 136px;
+  overflow: auto;
 }
 
 .control-list {
@@ -855,6 +913,7 @@ kbd {
   .inventory-grid,
   .notice,
   .control-list,
+  .teleport-panel,
     .action-grid {
     grid-column: 1 / -1;
   }
@@ -915,6 +974,10 @@ kbd {
   .stat-grid,
   .inventory-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teleport-panel {
+    grid-template-columns: 1fr;
   }
 }
 
