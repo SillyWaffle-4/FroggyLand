@@ -16,6 +16,7 @@ import {
   TONGUE_UPGRADE_LIMIT,
   TONGUE_UPGRADE_STEP,
   TONGUE_SPEED,
+  TUTORIAL_END_X,
   VIEW_HEIGHT,
   VIEW_WIDTH,
   keys,
@@ -57,6 +58,7 @@ export function createInitialState() {
     nearbyNpcId: null,
     notice: "Catch flies, trade with pond folk, and explore the open map.",
     noticeTimer: 3.2,
+    tutorialComplete: false,
     pointer: { x: WORLD.spawn.x, y: WORLD.spawn.y },
     reachedGoal: false,
     activeCheckpoint: null,
@@ -164,6 +166,9 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   frog.x += frog.vx * dt;
   frog.y += frog.vy * dt;
   frog.x = clamp(frog.x, 18, WORLD.worldWidth - FROG_WIDTH - 20);
+  if (frog.x >= TUTORIAL_END_X) {
+    state.tutorialComplete = true;
+  }
 
   state.active = getActiveWorld(state.cameraX, frog.x);
   resolveTerrain(state, previousY);

@@ -44,11 +44,11 @@ export const meadow = {
     { id: "creek-arch", x: 1325, y: 286 },
   ],
   messages: [
-    { x: 130, y: 470, w: 240, text: "Move with A/D or arrows" },
-    { x: 510, y: 418, w: 260, text: "Jump with W, Space, or Up" },
-    { x: 725, y: 355, w: 270, text: "Click flies with the tongue" },
-    { x: 1030, y: 462, w: 355, text: "Trade for a pad, then place it on water" },
-    { x: 1285, y: 285, w: 320, text: "This ledge needs a lily pad boost" },
+    { x: 130, y: 470, w: 240, text: "Move with A/D or arrows", tutorial: true },
+    { x: 510, y: 418, w: 260, text: "Jump with W, Space, or Up", tutorial: true },
+    { x: 725, y: 355, w: 270, text: "Click flies with the tongue", tutorial: true },
+    { x: 1030, y: 462, w: 355, text: "Trade for a pad, then place it on water", tutorial: true },
+    { x: 1285, y: 285, w: 320, text: "This ledge needs a lily pad boost", tutorial: true },
     { x: 2070, y: 410, w: 280, text: "Cave mouth ahead" },
   ],
   checkpoints: [

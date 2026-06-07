@@ -207,29 +207,35 @@ export function FrogGame({ soundOn }) {
             <strong>{hud.tongueRange}</strong>
           </div>
         </div>
-        <div className="action-grid">
-          <button
-            type="button"
-            className="panel-button"
-            onClick={() => tradeWithNearbyNpc(stateRef.current, soundOnRef.current)}
-          >
-            Trade
-          </button>
-          <button
-            type="button"
-            className="panel-button"
-            onClick={() => togglePlacementMode(stateRef.current)}
-          >
-            Place Pad
-          </button>
-        </div>
+        {(hud.canTrade || hud.canPlace) && (
+          <div className="action-grid">
+            {hud.canTrade && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={() => tradeWithNearbyNpc(stateRef.current, soundOnRef.current)}
+              >
+                Trade
+              </button>
+            )}
+            {hud.canPlace && (
+              <button
+                type="button"
+                className="panel-button"
+                onClick={() => togglePlacementMode(stateRef.current)}
+              >
+                {hud.placementMode ? "Stop Placing" : "Place Pad"}
+              </button>
+            )}
+          </div>
+        )}
         <p className="notice">{hud.nearbyNpcName ? `Near ${hud.nearbyNpcName}. ${hud.notice}` : hud.notice}</p>
         <div className="control-list" aria-label="Controls">
-          <span><kbd>A</kbd><kbd>D</kbd> Move</span>
-          <span><kbd>W</kbd><kbd>Space</kbd> Jump</span>
+          {!hud.tutorialComplete && <span><kbd>A</kbd><kbd>D</kbd> Move</span>}
+          {!hud.tutorialComplete && <span><kbd>W</kbd><kbd>Space</kbd> Jump</span>}
           <span><kbd>Click</kbd> Tongue</span>
-          <span><kbd>E</kbd> Trade</span>
-          <span><kbd>P</kbd> Place</span>
+          {hud.canTrade && <span><kbd>E</kbd> Trade</span>}
+          {hud.canPlace && <span><kbd>P</kbd> Place</span>}
         </div>
       </aside>
     </section>
@@ -251,6 +257,9 @@ function makeHud(state) {
     checkpointName: state.activeCheckpoint ? "On" : "Off",
     placementMode: state.placementMode,
     nearbyNpcName: nearbyNpc?.name ?? null,
+    canTrade: Boolean(nearbyNpc),
+    canPlace: state.lilyPads > 0 || state.placementMode,
+    tutorialComplete: state.tutorialComplete,
     tongueCooldown: state.tongueCooldown > 0 ? `${Math.ceil(state.tongueCooldown * 10) / 10}s` : "Ready",
     tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
     notice: state.notice,

@@ -22,7 +22,7 @@ export function drawGame(ctx, state) {
   drawDecorations(ctx, state.active.decorations, cameraX);
   drawLilypads(ctx, state, state.time, cameraX);
   drawPlacementPreview(ctx, state);
-  drawMessages(ctx, state.active.messages, cameraX);
+  drawMessages(ctx, state, state.active.messages, cameraX);
   drawCurrencyPickups(ctx, state, cameraX);
   drawRelics(ctx, state, state.active.relics, cameraX);
   drawNpcs(ctx, state, state.active.npcs, cameraX);
@@ -236,10 +236,13 @@ function drawPlacementPreview(ctx, state) {
   ctx.restore();
 }
 
-function drawMessages(ctx, messages, cameraX) {
+function drawMessages(ctx, state, messages, cameraX) {
   ctx.font = "600 17px Inter, system-ui, sans-serif";
   ctx.textAlign = "center";
   for (const message of messages) {
+    if (message.tutorial && state.tutorialComplete) {
+      continue;
+    }
     const width = message.w ?? 290;
     if (!isRectVisible(cameraX, message.x - width / 2, width, 80)) {
       continue;
