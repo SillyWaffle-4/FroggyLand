@@ -49,11 +49,50 @@ function clampToWorld(value, size) {
   return Math.max(48, Math.min(TOP_DOWN_WORLD_SIZE - size - 48, value));
 }
 
+function rectsTouch(a, b, margin = 0) {
+  return (
+    a.x < b.x + b.w + margin &&
+    a.x + a.w + margin > b.x &&
+    a.y < b.y + b.h + margin &&
+    a.y + a.h + margin > b.y
+  );
+}
+
 function chooseWallMaterial(next) {
   const roll = next();
   if (roll > 0.88) return "crystal";
   if (roll > 0.58) return "stone";
   return "clay";
+}
+
+function mergeRects(rects, margin = 18) {
+  const merged = rects.map((rect) => ({ ...rect }));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < merged.length; i += 1) {
+      for (let j = i + 1; j < merged.length; j += 1) {
+        if (!rectsTouch(merged[i], merged[j], margin)) continue;
+        const minX = Math.min(merged[i].x, merged[j].x);
+        const minY = Math.min(merged[i].y, merged[j].y);
+        const maxX = Math.max(merged[i].x + merged[i].w, merged[j].x + merged[j].w);
+        const maxY = Math.max(merged[i].y + merged[i].h, merged[j].y + merged[j].h);
+        merged[i] = {
+          ...merged[i],
+          id: `${merged[i].id}+${merged[j].id}`,
+          x: minX,
+          y: minY,
+          w: maxX - minX,
+          h: maxY - minY,
+        };
+        merged.splice(j, 1);
+        changed = true;
+        break;
+      }
+      if (changed) break;
+    }
+  }
+  return merged;
 }
 
 export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
@@ -86,20 +125,27 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
 
   const wallCount = 1 + Math.floor(next() * 3);
   for (let i = 0; i < wallCount; i += 1) {
-    const horizontal = next() > 0.5;
-    const w = horizontal ? 470 + Math.floor(next() * 290) : 122 + Math.floor(next() * 72);
-    const h = horizontal ? 120 + Math.floor(next() * 74) : 470 + Math.floor(next() * 290);
-    const wall = {
-      id: `wall-${chunkX}-${chunkY}-${i}`,
-      type: "wall",
-      material: chooseWallMaterial(next),
-      x: clampToWorld(baseX + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - w - 200)), w),
-      y: clampToWorld(baseY + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 200)), h),
-      w,
-      h,
-      color: next() > 0.45 ? "#6f7b75" : "#8b8172",
-      mineable: true,
-    };
+    let wall = null;
+    for (let attempt = 0; attempt < 5 && !wall; attempt += 1) {
+      const horizontal = next() > 0.5;
+      const w = horizontal ? 500 + Math.floor(next() * 260) : 126 + Math.floor(next() * 62);
+      const h = horizontal ? 126 + Math.floor(next() * 62) : 500 + Math.floor(next() * 260);
+      const candidate = {
+        id: `wall-${chunkX}-${chunkY}-${i}`,
+        type: "wall",
+        material: chooseWallMaterial(next),
+        x: clampToWorld(baseX + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - w - 200)), w),
+        y: clampToWorld(baseY + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 200)), h),
+        w,
+        h,
+        color: next() > 0.45 ? "#6f7b75" : "#8b8172",
+        mineable: true,
+      };
+      if (!walls.some((existing) => rectsTouch(existing, candidate, 90))) {
+        wall = candidate;
+      }
+    }
+    if (!wall) continue;
     walls.push(wall);
 
     if (next() < 0.6) {
@@ -185,7 +231,7 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   return {
     key: `${chunkX}:${chunkY}`,
     walls,
-    water,
+    water: mergeRects(water),
     lilyPads,
     structures,
     pickups,

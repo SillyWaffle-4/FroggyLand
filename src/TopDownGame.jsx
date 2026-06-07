@@ -115,9 +115,10 @@ export function TopDownGame({ soundOn }) {
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
+    const zoom = stateRef.current.zoom || 1;
     return {
-      x: ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH + stateRef.current.cameraX,
-      y: ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT + stateRef.current.cameraY,
+      x: (((event.clientX - rect.left) / rect.width) * VIEW_WIDTH) / zoom + stateRef.current.cameraX,
+      y: (((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT) / zoom + stateRef.current.cameraY,
     };
   }, []);
 

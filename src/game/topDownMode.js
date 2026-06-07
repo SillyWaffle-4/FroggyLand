@@ -11,6 +11,7 @@ const LEAP_SPEED_MULTIPLIER = 1.45;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
+export const TOP_DOWN_ZOOM = 0.86;
 
 export const PICKAXES = [
   { tier: 0, id: "none", name: "None", material: "bare hands", costPearls: 0, maxWallTier: 0, hits: Infinity },
@@ -34,6 +35,7 @@ export function createTopDownState() {
   const state = {
     worldSize: TOP_DOWN_WORLD_SIZE,
     time: 0,
+    zoom: TOP_DOWN_ZOOM,
     cameraX: 0,
     cameraY: 0,
     frog,
@@ -105,8 +107,6 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
 
 function moveTopDownFrog(state, pressed, dt) {
   const frog = state.frog;
-  const oldX = frog.x;
-  const oldY = frog.y;
   const dx = (pressed.has("KeyD") || pressed.has("ArrowRight") ? 1 : 0) - (pressed.has("KeyA") || pressed.has("ArrowLeft") ? 1 : 0);
   const dy = (pressed.has("KeyS") || pressed.has("ArrowDown") ? 1 : 0) - (pressed.has("KeyW") || pressed.has("ArrowUp") ? 1 : 0);
   const length = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -118,22 +118,21 @@ function moveTopDownFrog(state, pressed, dt) {
   frog.y = clamp(frog.y + (dy / length) * speed * dt, 36, state.worldSize - 36);
   if (dx !== 0) frog.facing = dx < 0 ? -1 : 1;
 
-  if (!leaping && isBlockedByWall(state)) {
-    frog.x = oldX;
-    frog.y = oldY;
+  if (!leaping) {
+    resolveWallCollisions(state);
   }
 }
 
 function updateCamera(state) {
-  state.cameraX = clamp(state.frog.x - VIEW_WIDTH / 2, 0, state.worldSize - VIEW_WIDTH);
-  state.cameraY = clamp(state.frog.y - VIEW_HEIGHT / 2, 0, state.worldSize - VIEW_HEIGHT);
+  state.cameraX = clamp(state.frog.x - viewportWidth(state) / 2, 0, state.worldSize - viewportWidth(state));
+  state.cameraY = clamp(state.frog.y - viewportHeight(state) / 2, 0, state.worldSize - viewportHeight(state));
 }
 
 function getActiveTopDown(state) {
   const minX = state.cameraX - ACTIVE_MARGIN;
-  const maxX = state.cameraX + VIEW_WIDTH + ACTIVE_MARGIN;
+  const maxX = state.cameraX + viewportWidth(state) + ACTIVE_MARGIN;
   const minY = state.cameraY - ACTIVE_MARGIN;
-  const maxY = state.cameraY + VIEW_HEIGHT + ACTIVE_MARGIN;
+  const maxY = state.cameraY + viewportHeight(state) + ACTIVE_MARGIN;
   const startChunkX = Math.floor(minX / TOP_DOWN_CHUNK_SIZE);
   const endChunkX = Math.floor(maxX / TOP_DOWN_CHUNK_SIZE);
   const startChunkY = Math.floor(minY / TOP_DOWN_CHUNK_SIZE);
@@ -155,6 +154,8 @@ function getActiveTopDown(state) {
       active.pickups.push(...chunk.pickups);
     }
   }
+
+  active.water = mergeWaterRects(active.water);
 
   active.roads.push(...URBAN_FEATURES.roads.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.parks.push(...URBAN_FEATURES.parks.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
@@ -182,6 +183,53 @@ function isVisible(item, minX, minY, maxX, maxY) {
   return item.x + item.w >= minX && item.x <= maxX && item.y + item.h >= minY && item.y <= maxY;
 }
 
+function viewportWidth(state) {
+  return VIEW_WIDTH / state.zoom;
+}
+
+function viewportHeight(state) {
+  return VIEW_HEIGHT / state.zoom;
+}
+
+function waterRectsTouch(a, b, margin = 16) {
+  return (
+    a.x < b.x + b.w + margin &&
+    a.x + a.w + margin > b.x &&
+    a.y < b.y + b.h + margin &&
+    a.y + a.h + margin > b.y
+  );
+}
+
+function mergeWaterRects(water) {
+  const merged = water.map((item) => ({ ...item }));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < merged.length; i += 1) {
+      for (let j = i + 1; j < merged.length; j += 1) {
+        if (!waterRectsTouch(merged[i], merged[j])) continue;
+        const minX = Math.min(merged[i].x, merged[j].x);
+        const minY = Math.min(merged[i].y, merged[j].y);
+        const maxX = Math.max(merged[i].x + merged[i].w, merged[j].x + merged[j].w);
+        const maxY = Math.max(merged[i].y + merged[i].h, merged[j].y + merged[j].h);
+        merged[i] = {
+          ...merged[i],
+          id: `${merged[i].id}+${merged[j].id}`,
+          x: minX,
+          y: minY,
+          w: maxX - minX,
+          h: maxY - minY,
+        };
+        merged.splice(j, 1);
+        changed = true;
+        break;
+      }
+      if (changed) break;
+    }
+  }
+  return merged;
+}
+
 function frogRect(state, padding = 0) {
   return {
     x: state.frog.x - FROG_SIZE / 2 + padding,
@@ -191,9 +239,30 @@ function frogRect(state, padding = 0) {
   };
 }
 
-function isBlockedByWall(state) {
-  const rect = frogRect(state, 7);
-  return state.active.walls.some((wall) => rectsOverlap(rect, wall));
+function resolveWallCollisions(state) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const rect = frogRect(state, 7);
+    const wall = state.active.walls.find((item) => rectsOverlap(rect, item));
+    if (!wall) return false;
+
+    const frogCenterX = rect.x + rect.w / 2;
+    const frogCenterY = rect.y + rect.h / 2;
+    const wallCenterX = wall.x + wall.w / 2;
+    const wallCenterY = wall.y + wall.h / 2;
+    const overlapRight = rect.x + rect.w - wall.x;
+    const overlapLeft = wall.x + wall.w - rect.x;
+    const overlapBottom = rect.y + rect.h - wall.y;
+    const overlapTop = wall.y + wall.h - rect.y;
+    const pushX = frogCenterX < wallCenterX ? -overlapRight : overlapLeft;
+    const pushY = frogCenterY < wallCenterY ? -overlapBottom : overlapTop;
+
+    if (Math.abs(pushX) < Math.abs(pushY)) {
+      state.frog.x = clamp(state.frog.x + pushX + Math.sign(pushX || 1) * 0.75, 28, state.worldSize - 28);
+    } else {
+      state.frog.y = clamp(state.frog.y + pushY + Math.sign(pushY || 1) * 0.75, 36, state.worldSize - 36);
+    }
+  }
+  return true;
 }
 
 function isInWater(state) {
@@ -372,6 +441,7 @@ export function drawTopDownGame(ctx, state) {
   drawGround(ctx, state);
 
   ctx.save();
+  ctx.scale(state.zoom, state.zoom);
   ctx.translate(-state.cameraX, -state.cameraY);
   drawRoads(ctx, state);
   drawWater(ctx, state);
