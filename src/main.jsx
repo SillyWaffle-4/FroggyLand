@@ -28,7 +28,7 @@ function App() {
       <section className="topbar" aria-label="Game controls">
         <div>
           <h1>FroggyLand</h1>
-          <p>{mode === "platformer" ? "Open-map platformer" : "Top-down pond builder"}</p>
+          <p>{mode === "platformer" ? "Open-map platformer" : "Top-down pond explorer"}</p>
         </div>
         <div className="button-row">
           <button
@@ -86,10 +86,10 @@ function ModeMenu({ onSelect }) {
       <div className="menu-copy">
         <div className="menu-kicker">
           <Sparkles size={18} />
-          Random structures, currencies, builds, and big exploration
+          Random structures, currencies, shops, and big exploration
         </div>
         <h1>FroggyLand</h1>
-        <p>Pick how you want to explore: side-scrolling caves and roads, or a top-down pond map where you decorate your little frog home.</p>
+        <p>Pick how you want to explore: side-scrolling caves and roads, or a huge top-down pond map with shops, water, walls, and lily-pad leaps.</p>
       </div>
       <div className="mode-card-grid">
         <button className="mode-card platform-card" type="button" onClick={() => onSelect("platformer")}>
@@ -100,7 +100,7 @@ function ModeMenu({ onSelect }) {
         <button className="mode-card topdown-card" type="button" onClick={() => onSelect("topdown")}>
           <span className="mode-icon"><Hammer size={28} /></span>
           <strong>Top Down Mode</strong>
-          <span>Roam a pondland, discover random huts and ruins, collect loot, and build decorations.</span>
+          <span>Roam a scrolling pondland, discover random huts and ruins, collect loot, and use shops.</span>
         </button>
       </div>
     </section>

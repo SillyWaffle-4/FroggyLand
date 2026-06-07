@@ -1,6 +1,5 @@
 import { TOP_DOWN_WORLD_SIZE, VIEW_HEIGHT, VIEW_WIDTH } from "./constants.js";
 import { beep } from "./audio.js";
-import { BUILD_CATALOG, buildCurrencyLabel, getBuildItem } from "./building.js";
 import { TOP_DOWN_CHUNK_SIZE, TOP_DOWN_URBAN, generateTopDownChunk } from "./procedural.js";
 import { clamp, rectsOverlap, roundRect } from "./utils.js";
 
@@ -30,9 +29,6 @@ export function createTopDownState() {
     lilyBoostTimer: 0,
     discoveredStructures: new Set(),
     collectedPickups: new Set(),
-    placedBuilds: [],
-    buildInventory: Object.fromEntries(BUILD_CATALOG.map((item) => [item.id, 0])),
-    buildMode: null,
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -80,8 +76,6 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
     const place = findNearbyTopDownPlace(state);
     if (place) {
       state.notice = `${place.name}: ${place.talk}`;
-    } else if (state.buildMode) {
-      state.notice = "Click an open spot to place your bought house piece.";
     } else if (onLilyPad || state.lilyBoostTimer > 0) {
       state.notice = "Press Space from a lily pad to leap over walls.";
     } else {
@@ -271,60 +265,6 @@ export function interactTopDownPlace(state, soundOn) {
   return true;
 }
 
-export function buyTopDownBuildItem(state, itemId, soundOn) {
-  const item = getBuildItem(itemId);
-  if (!item) return false;
-  const available = getCurrency(state, item.currency);
-  if (available < item.cost) {
-    setNotice(state, `${item.name} costs ${item.cost} ${buildCurrencyLabel(item.currency)}. You have ${available}.`);
-    if (soundOn) beep(160, 0.04);
-    return false;
-  }
-  spendCurrency(state, item.currency, item.cost);
-  state.buildInventory[item.id] = (state.buildInventory[item.id] ?? 0) + 1;
-  state.buildMode = item.id;
-  setNotice(state, `${item.name} bought. Click an open spot to place it.`);
-  if (soundOn) beep(760, 0.05);
-  return true;
-}
-
-export function selectTopDownBuildItem(state, itemId) {
-  const item = getBuildItem(itemId);
-  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) return false;
-  state.buildMode = item.id;
-  setNotice(state, `Placing ${item.name}.`);
-  return true;
-}
-
-export function cancelTopDownBuild(state) {
-  state.buildMode = null;
-}
-
-export function placeTopDownBuildItem(state, pointer, soundOn) {
-  const item = getBuildItem(state.buildMode);
-  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) {
-    state.buildMode = null;
-    return false;
-  }
-  const x = clamp(pointer.x, item.w / 2 + 18, state.worldSize - item.w / 2 - 18);
-  const y = clamp(pointer.y, item.h / 2 + 18, state.worldSize - item.h / 2 - 18);
-  const nextRect = { x: x - item.w / 2, y: y - item.h / 2, w: item.w, h: item.h };
-  const tooCloseToFrog = rectsOverlap(nextRect, { x: state.frog.x - 42, y: state.frog.y - 42, w: 84, h: 84 });
-  const blocked = state.active.walls.some((wall) => rectsOverlap(nextRect, wall)) || state.placedBuilds.some((placed) => (
-    rectsOverlap(nextRect, { x: placed.x - placed.w / 2, y: placed.y - placed.h / 2, w: placed.w, h: placed.h })
-  ));
-  if (tooCloseToFrog || blocked) {
-    setNotice(state, "That spot is too crowded.");
-    return false;
-  }
-  state.placedBuilds.push({ id: crypto.randomUUID(), itemId: item.id, x, y, w: item.w, h: item.h });
-  state.buildInventory[item.id] -= 1;
-  state.buildMode = state.buildInventory[item.id] > 0 ? item.id : null;
-  setNotice(state, `${item.name} placed.`);
-  if (soundOn) beep(620, 0.05);
-  return true;
-}
-
 export function drawTopDownGame(ctx, state) {
   ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   drawGround(ctx, state);
@@ -338,8 +278,6 @@ export function drawTopDownGame(ctx, state) {
   drawWalls(ctx, state);
   drawStructures(ctx, state);
   drawTopDownPickups(ctx, state);
-  drawTopDownBuilds(ctx, state);
-  drawBuildPreview(ctx, state);
   drawFrog(ctx, state);
   ctx.restore();
 }
@@ -544,70 +482,6 @@ function drawTopDownPickups(ctx, state) {
   }
 }
 
-function drawTopDownBuilds(ctx, state) {
-  for (const placed of state.placedBuilds) {
-    const item = getBuildItem(placed.itemId);
-    if (!item) continue;
-    drawBuildPiece(ctx, item, placed.x, placed.y, placed.w, placed.h, 1);
-  }
-}
-
-function drawBuildPreview(ctx, state) {
-  const item = getBuildItem(state.buildMode);
-  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) return;
-  ctx.save();
-  ctx.globalAlpha = 0.5;
-  drawBuildPiece(ctx, item, state.pointer.x, state.pointer.y, item.w, item.h, 1);
-  ctx.restore();
-}
-
-function drawBuildPiece(ctx, item, cx, cy, w, h, alpha) {
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  if (item.kind === "roof") {
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    ctx.moveTo(cx - w / 2 - 8, cy + h / 2);
-    ctx.lineTo(cx, cy - h / 2);
-    ctx.lineTo(cx + w / 2 + 8, cy + h / 2);
-    ctx.closePath();
-    ctx.fill();
-  } else if (item.kind === "window") {
-    ctx.fillStyle = item.color;
-    roundRect(ctx, cx - w / 2, cy - h / 2, w, h, 8);
-    ctx.fill();
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  } else if (item.kind === "plant") {
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 5;
-    for (let i = 0; i < 4; i += 1) {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + h / 2);
-      ctx.quadraticCurveTo(cx - 26 + i * 18, cy, cx - 20 + i * 15, cy - h / 2);
-      ctx.stroke();
-    }
-  } else if (item.kind === "decor") {
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - h / 2);
-    ctx.lineTo(cx, cy + h / 2);
-    ctx.stroke();
-    ctx.fillStyle = item.color;
-    roundRect(ctx, cx - w / 2 + 5, cy - 8, w - 10, 24, 7);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = item.color;
-    roundRect(ctx, cx - w / 2, cy - h / 2, w, h, 8);
-    ctx.fill();
-    ctx.fillStyle = item.accent;
-    ctx.fillRect(cx - 8, cy + h / 2 - 24, 16, 24);
-  }
-  ctx.restore();
-}
-
 function drawFrog(ctx, state) {
   const frog = state.frog;
   const leaping = state.leapTimer > 0;
@@ -721,18 +595,6 @@ function makeUrbanFeatures() {
 function setNotice(state, text, duration = 2.8) {
   state.notice = text;
   state.noticeTimer = duration;
-}
-
-function getCurrency(state, currency) {
-  if (currency === "pearls") return state.pearls;
-  if (currency === "amber") return state.amber;
-  return state.score;
-}
-
-function spendCurrency(state, currency, amount) {
-  if (currency === "pearls") state.pearls -= amount;
-  else if (currency === "amber") state.amber -= amount;
-  else state.score -= amount;
 }
 
 function addCurrency(state, currency, amount) {
