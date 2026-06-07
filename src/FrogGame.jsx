@@ -11,6 +11,7 @@ import {
   tradeWithNearbyNpc,
   updateGame,
 } from "./game/simulation.js";
+import { FURNITURE_SHOP_ITEMS, PICKAXES } from "./game/topDownMode.js";
 
 const HOUSE_PARTS = [
   { id: "window", name: "Round Window" },
@@ -19,7 +20,8 @@ const HOUSE_PARTS = [
   { id: "trophy", name: "Parkour Trophy" },
 ];
 
-const PARKOUR_GOAL_X = 1880;
+const PARKOUR_GOAL_X = 1500;
+const SHOP_GOAL_X = 1500;
 
 const EMPTY_PROGRESS = {
   houseParts: {},
@@ -36,6 +38,7 @@ export function FrogGame(props) {
 
 function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
   const isParkourEntry = entry.startsWith("parkour");
+  const isShopEntry = entry === "shop";
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
   const progressRef = React.useRef(progress);
@@ -44,6 +47,9 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     stateRef.current = createInitialState();
     if (isParkourEntry) {
       stateRef.current.notice = "Parkour House: clear the short section to earn one furniture part.";
+      stateRef.current.noticeTimer = 4;
+    } else if (isShopEntry) {
+      stateRef.current.notice = "Market Hall: clear the short platformer room to unlock the shop counter.";
       stateRef.current.noticeTimer = 4;
     }
   }
@@ -132,6 +138,8 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       updateGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
       if (isParkourEntry) {
         grantParkourReward(stateRef.current, entry, progressRef.current, onProgressChange);
+      } else if (isShopEntry) {
+        unlockMarketCounter(stateRef.current);
       }
       drawGame(context, stateRef.current);
 
@@ -178,9 +186,16 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     pointerRef.current.down = false;
   };
 
+  const handleMarketAction = (action) => {
+    const message = runMarketAction(action, progressRef.current, onProgressChange);
+    stateRef.current.notice = message;
+    stateRef.current.noticeTimer = 3;
+    setHud(makeHud(stateRef.current, entry, progressRef.current));
+  };
+
   return (
     <section className="game-layout">
-      <div className="canvas-wrap" ref={wrapperRef}>
+      <div className="canvas-wrap platformer-wrap" ref={wrapperRef}>
         <canvas
           ref={canvasRef}
           width={VIEW_WIDTH}
@@ -231,7 +246,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
             </div>
           )}
         </div>
-        {(hud.canTrade || hud.canPlace || hud.canReturnTopDown) && (
+        {(hud.canTrade || hud.canPlace || hud.canReturnTopDown || hud.marketUnlocked) && (
           <div className="action-grid">
             {hud.canReturnTopDown && (
               <button
@@ -260,6 +275,22 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
                 {hud.placementMode ? "Stop Placing" : "Place Pad"}
               </button>
             )}
+            {hud.marketUnlocked && (
+              <>
+                <button type="button" className="panel-button" onClick={() => handleMarketAction("trade")}>
+                  Trade Flies
+                </button>
+                <button type="button" className="panel-button" onClick={() => handleMarketAction("leap")}>
+                  Buy Leap
+                </button>
+                <button type="button" className="panel-button" onClick={() => handleMarketAction("pickaxe")}>
+                  Buy Pickaxe
+                </button>
+                <button type="button" className="panel-button" onClick={() => handleMarketAction("furniture")}>
+                  Furniture
+                </button>
+              </>
+            )}
           </div>
         )}
         <p className="notice">{hud.nearbyNpcName ? `Near ${hud.nearbyNpcName}. ${hud.notice}` : hud.notice}</p>
@@ -278,14 +309,16 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
 
 function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
   const isParkourEntry = entry.startsWith("parkour");
+  const isShopEntry = entry === "shop";
   const nearbyNpc = findNearbyNpc(state);
   const partTotal = Object.values(progress.houseParts ?? {}).reduce((total, value) => total + value, 0);
+  const topDown = progress.topDown ?? {};
   return {
-    regionName: isParkourEntry ? "Parkour House" : state.regionName,
-    score: state.score,
+    regionName: isParkourEntry ? "Parkour House" : isShopEntry ? "Market Hall" : state.regionName,
+    score: isShopEntry ? topDown.score ?? 0 : state.score,
     lilyPads: state.lilyPads,
-    pearls: state.pearls,
-    amber: state.amber,
+    pearls: isShopEntry ? topDown.pearls ?? 0 : state.pearls,
+    amber: isShopEntry ? topDown.amber ?? 0 : state.amber,
     relics: state.collectedRelics.size,
     totalRelics: WORLD.relics.length,
     placementMode: state.placementMode,
@@ -293,6 +326,7 @@ function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
     canTrade: Boolean(nearbyNpc),
     canPlace: state.lilyPads > 0 || state.placementMode,
     canReturnTopDown: entry !== "openMap",
+    marketUnlocked: isShopEntry && state.shopUnlocked,
     tutorialComplete: state.tutorialComplete,
     tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
     partTotal,
@@ -316,6 +350,84 @@ function grantParkourReward(state, entry, progress, onProgressChange) {
   }));
   state.notice = `Platformer reward earned: ${reward.name}.`;
   state.noticeTimer = 3.4;
+}
+
+function unlockMarketCounter(state) {
+  if (state.shopUnlocked || state.frog.x < SHOP_GOAL_X) return;
+  state.shopUnlocked = true;
+  state.notice = "Market counter unlocked. Buy upgrades, trade, or shop furniture.";
+  state.noticeTimer = 3.4;
+}
+
+function runMarketAction(action, progress, onProgressChange) {
+  const topDown = progress.topDown ?? {};
+  const nextTopDown = { ...topDown };
+  const grantPart = {};
+
+  if (action === "trade") {
+    if ((nextTopDown.score ?? 0) < 4) return "Market trade needs 4 flies.";
+    nextTopDown.score -= 4;
+    nextTopDown.amber = (nextTopDown.amber ?? 0) + 1;
+    nextTopDown.pearls = (nextTopDown.pearls ?? 0) + 1;
+    onProgressChange?.({ topDown: nextTopDown });
+    return "Traded 4 flies for 1 amber and 1 pearl.";
+  }
+
+  if (action === "leap") {
+    if ((nextTopDown.leapUpgrade ?? 0) >= 10) return "Lily leap is already level 10.";
+    if ((nextTopDown.amber ?? 0) < 3 || (nextTopDown.pearls ?? 0) < 2) return "Leap upgrade costs 3 amber and 2 pearls.";
+    nextTopDown.amber -= 3;
+    nextTopDown.pearls -= 2;
+    nextTopDown.leapUpgrade = (nextTopDown.leapUpgrade ?? 0) + 1;
+    onProgressChange?.({ topDown: nextTopDown });
+    return `Lily leap upgraded to level ${nextTopDown.leapUpgrade}.`;
+  }
+
+  if (action === "pickaxe") {
+    const nextPickaxe = PICKAXES.find((pickaxe) => pickaxe.tier === (nextTopDown.pickaxeTier ?? 0) + 1);
+    if (!nextPickaxe) return "You already have the strongest pickaxe.";
+    const amberCost = nextPickaxe.costAmber ?? 0;
+    if ((nextTopDown.pearls ?? 0) < nextPickaxe.costPearls || (nextTopDown.amber ?? 0) < amberCost) {
+      const amberText = amberCost > 0 ? ` and ${amberCost} amber` : "";
+      return `${nextPickaxe.name} costs ${nextPickaxe.costPearls} pearls${amberText}.`;
+    }
+    nextTopDown.pearls -= nextPickaxe.costPearls;
+    nextTopDown.amber -= amberCost;
+    nextTopDown.pickaxeTier = nextPickaxe.tier;
+    onProgressChange?.({ topDown: nextTopDown });
+    return `Bought ${nextPickaxe.name}.`;
+  }
+
+  const shopIndex = nextTopDown.furnitureShopIndex ?? 0;
+  const item = FURNITURE_SHOP_ITEMS[shopIndex % FURNITURE_SHOP_ITEMS.length];
+  if (!canAffordMarketCost(nextTopDown, item.cost)) return `${item.name} costs ${marketCostLabel(item.cost)}.`;
+  spendMarketCost(nextTopDown, item.cost);
+  nextTopDown.furnitureShopIndex = shopIndex + 1;
+  grantPart[item.part] = (progress.houseParts?.[item.part] ?? 0) + 1;
+  onProgressChange?.({ topDown: nextTopDown, houseParts: grantPart });
+  return `Bought ${item.name} for your house.`;
+}
+
+function canAffordMarketCost(topDown, cost) {
+  return (
+    (topDown.score ?? 0) >= (cost.flies ?? 0) &&
+    (topDown.pearls ?? 0) >= (cost.pearls ?? 0) &&
+    (topDown.amber ?? 0) >= (cost.amber ?? 0)
+  );
+}
+
+function spendMarketCost(topDown, cost) {
+  topDown.score = (topDown.score ?? 0) - (cost.flies ?? 0);
+  topDown.pearls = (topDown.pearls ?? 0) - (cost.pearls ?? 0);
+  topDown.amber = (topDown.amber ?? 0) - (cost.amber ?? 0);
+}
+
+function marketCostLabel(cost) {
+  return [
+    cost.flies ? `${cost.flies} flies` : "",
+    cost.pearls ? `${cost.pearls} pearls` : "",
+    cost.amber ? `${cost.amber} amber` : "",
+  ].filter(Boolean).join(" and ");
 }
 
 function getParkourReward(entry) {

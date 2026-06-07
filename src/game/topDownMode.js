@@ -12,9 +12,9 @@ const MAX_LEAP_UPGRADE = 10;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
-const DAY_DURATION = 300;
-const NIGHT_DURATION = 660;
-const BIRD_INTERVAL = 60;
+const DAY_DURATION = 120;
+const NIGHT_DURATION = 180;
+const BIRD_INTERVAL = 20;
 const BIRD_WARNING = 8;
 const BIRD_SWOOP = 17;
 export const CHECKPOINT_COST = { pearls: 6, amber: 2 };
@@ -85,7 +85,8 @@ export function createTopDownState(progress = {}) {
     furnitureShopIndex: saved.furnitureShopIndex ?? 0,
     playerHouse: progress.house ? makePlayerHouse(progress.house.x, progress.house.y) : null,
     bird: null,
-    birdCooldown: BIRD_INTERVAL,
+    birdCooldown: getSyncedBirdCooldown(),
+    lastBirdSlot: getDayInfo().birdSlot,
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -430,17 +431,31 @@ function isOnLilyPad(state) {
   ));
 }
 
-export function getDayInfo(state) {
+export function getDayInfo() {
   const cycleLength = DAY_DURATION + NIGHT_DURATION;
-  const cycleTime = state.time % cycleLength;
+  const cycleTime = getSyncedSeconds() % cycleLength;
   const isDay = cycleTime < DAY_DURATION;
   const remaining = isDay ? DAY_DURATION - cycleTime : cycleLength - cycleTime;
+  const dayElapsed = isDay ? cycleTime : 0;
   return {
     isDay,
     phase: isDay ? "Day" : "Night",
     remaining,
+    dayElapsed,
+    birdSlot: isDay ? Math.floor(dayElapsed / BIRD_INTERVAL) : -1,
     label: `${isDay ? "Day" : "Night"} ${formatTime(remaining)}`,
   };
+}
+
+function getSyncedSeconds() {
+  return Date.now() / 1000;
+}
+
+function getSyncedBirdCooldown() {
+  const dayInfo = getDayInfo();
+  if (!dayInfo.isDay) return BIRD_INTERVAL;
+  const elapsedInSlot = dayInfo.dayElapsed % BIRD_INTERVAL;
+  return Math.max(1, BIRD_INTERVAL - elapsedInSlot);
 }
 
 function updateBirdHazard(state, dt, soundOn) {
@@ -448,12 +463,14 @@ function updateBirdHazard(state, dt, soundOn) {
   if (!dayInfo.isDay) {
     state.bird = null;
     state.birdCooldown = BIRD_INTERVAL;
+    state.lastBirdSlot = -1;
     return;
   }
 
   if (!state.bird) {
-    state.birdCooldown -= dt;
-    if (state.birdCooldown <= 0) {
+    state.birdCooldown = getSyncedBirdCooldown();
+    if (dayInfo.birdSlot !== state.lastBirdSlot && dayInfo.dayElapsed > 3) {
+      state.lastBirdSlot = dayInfo.birdSlot;
       state.bird = spawnBird(state);
       setNotice(state, "A bird is circling. Get into water before it dives.", BIRD_WARNING + 1);
       if (soundOn) beep(260, 0.08);
@@ -485,7 +502,7 @@ function updateBirdHazard(state, dt, soundOn) {
       if (soundOn) beep(120, 0.1);
     }
     state.bird = null;
-    state.birdCooldown = BIRD_INTERVAL + Math.random() * 14;
+    state.birdCooldown = getSyncedBirdCooldown();
   }
 }
 
@@ -592,70 +609,13 @@ export function interactTopDownPlace(state, soundOn) {
     return { mode: "platformer", entry: "houseInterior" };
   }
 
-  if (place.kind === "upgrade") {
-    if (state.amber < 3 || state.pearls < 2) {
-      setNotice(state, "Upgrade Shop wants 3 amber and 2 pearls for a stronger lily leap.");
-      if (soundOn) beep(160, 0.04);
-      return false;
-    }
-    if (state.leapUpgrade >= MAX_LEAP_UPGRADE) {
-      setNotice(state, "Your lily leap is already fully upgraded.");
-      return false;
-    }
-    state.amber -= 3;
-    state.pearls -= 2;
-    state.leapUpgrade += 1;
-    setNotice(state, `Lily leap upgraded to level ${state.leapUpgrade}.`);
-    if (soundOn) beep(980, 0.06);
-    return true;
+  if (place.kind === "market") {
+    setNotice(state, "Entering Market Hall. Clear the short parkour inside to use shops.", 2);
+    if (soundOn) beep(820, 0.06);
+    return { mode: "platformer", entry: "shop" };
   }
 
-  if (place.kind === "furniture") {
-    const item = FURNITURE_SHOP_ITEMS[state.furnitureShopIndex % FURNITURE_SHOP_ITEMS.length];
-    if (!canAffordCost(state, item.cost)) {
-      setNotice(state, `Furniture Shop wants ${costLabel(item.cost)} for ${item.name}.`);
-      if (soundOn) beep(160, 0.04);
-      return false;
-    }
-    spendCost(state, item.cost);
-    state.furnitureShopIndex += 1;
-    setNotice(state, `Bought ${item.name}. Place it inside your house.`);
-    if (soundOn) beep(900, 0.05);
-    return { furnitureReward: { part: item.part, name: item.name, amount: 1 } };
-  }
-
-  if (place.kind === "pickaxe") {
-    const nextPickaxe = PICKAXES.find((pickaxe) => pickaxe.tier === state.pickaxeTier + 1);
-    if (!nextPickaxe) {
-      setNotice(state, "Pickaxe Shop: you already have the strongest crystal pickaxe.");
-      return false;
-    }
-    const amberCost = nextPickaxe.costAmber ?? 0;
-    if (state.pearls < nextPickaxe.costPearls || state.amber < amberCost) {
-      const amberText = amberCost > 0 ? ` and ${amberCost} amber` : "";
-      setNotice(state, `Pickaxe Shop wants ${nextPickaxe.costPearls} pearls${amberText} for the ${nextPickaxe.name}.`);
-      if (soundOn) beep(160, 0.04);
-      return false;
-    }
-    state.pearls -= nextPickaxe.costPearls;
-    state.amber -= amberCost;
-    state.pickaxeTier = nextPickaxe.tier;
-    setNotice(state, `Bought ${nextPickaxe.name}. Press M near a wall to mine.`);
-    if (soundOn) beep(920, 0.06);
-    return true;
-  }
-
-  if (state.score < 4) {
-    setNotice(state, "Trading Place wants 4 flies for amber and pearls.");
-    if (soundOn) beep(160, 0.04);
-    return false;
-  }
-  state.score -= 4;
-  state.amber += 1;
-  state.pearls += 1;
-  setNotice(state, "Traded 4 flies for 1 amber and 1 pearl.");
-  if (soundOn) beep(740, 0.05);
-  return true;
+  return false;
 }
 
 export function buildTopDownHouse(state, soundOn) {
@@ -940,14 +900,8 @@ function drawStructures(ctx, state) {
     ctx.save();
     ctx.translate(item.x, item.y);
     ctx.globalAlpha = found ? 1 : 0.72;
-    if (item.type === "upgradeShop") {
-      drawShop(ctx, item, "#9d6cc7", "UP");
-    } else if (item.type === "pickaxeShop") {
-      drawShop(ctx, item, "#6f7b75", "PX");
-    } else if (item.type === "tradePost") {
-      drawShop(ctx, item, "#d58432", "TR");
-    } else if (item.type === "furnitureShop") {
-      drawShop(ctx, item, "#2d9eb4", "FS");
+    if (item.type === "marketHall") {
+      drawShop(ctx, item, "#9d6cc7", "MK");
     } else if (item.type === "parkourHouse") {
       drawHousePortal(ctx, item, "#5fcb55", "PK");
     } else if (item.type === "playerHouse") {
@@ -1121,52 +1075,16 @@ function makeUrbanFeatures() {
   ];
   const shops = [
     {
-      id: "upgrade-shop",
-      type: "upgradeShop",
-      name: "Upgrade Shop",
-      kind: "upgrade",
-      x: cx - 450,
-      y: cy - 260,
-      w: 190,
-      h: 130,
-      fixed: true,
-      talk: "Press E to buy stronger lily leaps. There are 10 upgrade levels.",
-    },
-    {
-      id: "pickaxe-shop",
-      type: "pickaxeShop",
-      name: "Pickaxe Shop",
-      kind: "pickaxe",
+      id: "market-hall",
+      type: "marketHall",
+      name: "Market Hall",
+      kind: "market",
       x: cx,
       y: cy - 382,
-      w: 190,
-      h: 130,
+      w: 250,
+      h: 150,
       fixed: true,
-      talk: "Press E to buy pickaxes. Stone costs 100 pearls and mines tougher walls.",
-    },
-    {
-      id: "trading-place",
-      type: "tradePost",
-      name: "Trading Place",
-      kind: "trade",
-      x: cx + 420,
-      y: cy - 250,
-      w: 190,
-      h: 130,
-      fixed: true,
-      talk: "Press E to trade 4 flies for 1 amber and 1 pearl.",
-    },
-    {
-      id: "furniture-shop",
-      type: "furnitureShop",
-      name: "Furniture Shop",
-      kind: "furniture",
-      x: cx + 620,
-      y: cy + 285,
-      w: 190,
-      h: 130,
-      fixed: true,
-      talk: "Press E to buy rotating furniture for your house interior.",
+      talk: "Press E to enter, clear a short parkour room, then buy upgrades, trade, and shop furniture.",
     },
     {
       id: "parkour-village-house",

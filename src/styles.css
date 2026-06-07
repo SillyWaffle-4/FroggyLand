@@ -453,6 +453,24 @@ canvas:focus-visible {
   width: 38px;
 }
 
+.show-chrome-button {
+  position: absolute;
+  z-index: 8;
+  top: 10px;
+  right: 10px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(26, 64, 42, 0.18);
+  border-radius: 8px;
+  color: #21452f;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 24px rgba(31, 71, 52, 0.16);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
 .play-shell .game-layout {
   width: 100%;
   height: 100vh;
@@ -473,6 +491,12 @@ canvas:focus-visible {
   box-shadow: none;
 }
 
+.play-shell .platformer-wrap {
+  display: grid;
+  place-items: center;
+  background: #8fd5ee;
+}
+
 .play-shell canvas {
   width: 100vw !important;
   height: 100vh !important;
@@ -480,6 +504,11 @@ canvas:focus-visible {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+.play-shell .platformer-wrap canvas {
+  width: min(100vw, calc(100vh * 1.774)) !important;
+  height: min(100vh, calc(100vw / 1.774)) !important;
 }
 
 .play-shell .panel {
@@ -497,6 +526,11 @@ canvas:focus-visible {
   overflow: auto;
   background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(12px);
+}
+
+.play-shell.chrome-hidden .panel {
+  top: 10px;
+  max-height: calc(100vh - 20px);
 }
 
 .play-shell .area-name {

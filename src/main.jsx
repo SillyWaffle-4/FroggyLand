@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Gamepad2, Hammer, Map, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Eye, EyeOff, Gamepad2, Hammer, Map, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
 import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
@@ -55,6 +55,7 @@ function App() {
   const [mode, setMode] = React.useState(null);
   const [platformerEntry, setPlatformerEntry] = React.useState("openMap");
   const [progress, setProgress] = React.useState(loadProgress);
+  const [chromeHidden, setChromeHidden] = React.useState(false);
 
   const updateProgress = React.useCallback((updater) => {
     setProgress((current) => {
@@ -97,45 +98,67 @@ function App() {
   }
 
   return (
-    <main className="app-shell play-shell">
-      <section className="topbar" aria-label="Game controls">
-        <div>
-          <h1>FroggyLand</h1>
-          <p>
-            {mode === "platformer"
-              ? platformerEntry === "houseInterior" ? "House interior editor" : platformerEntry === "parkourVillage" ? "Parkour village challenge" : "Open-map platformer"
-              : "Top-down pond explorer"}
-          </p>
-        </div>
-        <div className="button-row">
-          <button
-            className="mode-chip"
-            type="button"
-            onClick={() => setMode(null)}
-          >
-            <Map size={17} />
-            Modes
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => setRunId((value) => value + 1)}
-            aria-label="Restart run"
-            title="Restart run"
-          >
-            <RotateCcw size={20} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => setSoundOn((value) => !value)}
-            aria-label={soundOn ? "Mute placeholder sound" : "Unmute placeholder sound"}
-            title={soundOn ? "Mute placeholder sound" : "Unmute placeholder sound"}
-          >
-            {soundOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
-          </button>
-        </div>
-      </section>
+    <main className={`app-shell play-shell ${chromeHidden ? "chrome-hidden" : ""}`}>
+      {!chromeHidden && (
+        <section className="topbar" aria-label="Game controls">
+          <div>
+            <h1>FroggyLand</h1>
+            <p>
+              {mode === "platformer"
+                ? platformerEntry === "houseInterior" ? "House interior editor" : platformerEntry === "shop" ? "Market Hall platformer" : platformerEntry.startsWith("parkour") ? "Parkour house challenge" : "Open-map platformer"
+                : "Top-down pond explorer"}
+            </p>
+          </div>
+          <div className="button-row">
+            <button
+              className="mode-chip"
+              type="button"
+              onClick={() => setMode(null)}
+            >
+              <Map size={17} />
+              Modes
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setRunId((value) => value + 1)}
+              aria-label="Restart run"
+              title="Restart run"
+            >
+              <RotateCcw size={20} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setSoundOn((value) => !value)}
+              aria-label={soundOn ? "Mute placeholder sound" : "Unmute placeholder sound"}
+              title={soundOn ? "Mute placeholder sound" : "Unmute placeholder sound"}
+            >
+              {soundOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setChromeHidden(true)}
+              aria-label="Hide top menu"
+              title="Hide top menu"
+            >
+              <EyeOff size={20} />
+            </button>
+          </div>
+        </section>
+      )}
+      {chromeHidden && (
+        <button
+          type="button"
+          className="show-chrome-button"
+          onClick={() => setChromeHidden(false)}
+          aria-label="Show top menu"
+          title="Show top menu"
+        >
+          <Eye size={20} />
+        </button>
+      )}
 
       {mode === "platformer" ? (
         <FrogGame
