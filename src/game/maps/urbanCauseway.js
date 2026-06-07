@@ -69,7 +69,7 @@ export const urbanCauseway = {
     { x: 28280, y: 488, w: 330, text: "Watch the cars. They crash into you." },
     { x: 29400, y: 326, w: 300, text: "Trade before the second road" },
     { x: 30320, y: 488, w: 310, text: "Time your dash between cars" },
-    { x: 30775, y: 474, w: 250, text: "Roadside shrine" },
+    { x: 30775, y: 474, w: 250, text: "Forktail junction ahead" },
   ],
   checkpoints: [
     { id: "causeway-crossing", x: 27610, y: GROUND_Y, spawnX: 27610, spawnY: GROUND_Y - FROG_HEIGHT },

@@ -10,6 +10,7 @@ import { mistfallSteps } from "./maps/mistfallSteps.js";
 import { lockrootHollow } from "./maps/lockrootHollow.js";
 import { lanternCoast } from "./maps/lanternCoast.js";
 import { urbanCauseway } from "./maps/urbanCauseway.js";
+import { forktailJunction } from "./maps/forktailJunction.js";
 
 const CHUNKS = [
   meadow,
@@ -23,6 +24,7 @@ const CHUNKS = [
   lockrootHollow,
   lanternCoast,
   urbanCauseway,
+  forktailJunction,
 ];
 const BUCKET_SIZE = 520;
 
@@ -54,9 +56,9 @@ function buildBuckets(items) {
 
 export const WORLD = {
   name: "Froggy Wilds",
-  worldWidth: 30950,
+  worldWidth: 34350,
   spawn: { x: 86, y: 498 },
-  goal: { x: 30775, y: 345 },
+  goal: { x: 34230, y: 345 },
   regions: CHUNKS.map(({ name, startX, endX }) => ({ name, startX, endX })),
   platforms: flatten("platforms"),
   waterZones: flatten("waterZones"),
