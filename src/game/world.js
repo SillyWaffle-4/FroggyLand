@@ -11,6 +11,7 @@ import { lockrootHollow } from "./maps/lockrootHollow.js";
 import { lanternCoast } from "./maps/lanternCoast.js";
 import { urbanCauseway } from "./maps/urbanCauseway.js";
 import { forktailJunction } from "./maps/forktailJunction.js";
+import { generatePlatformerStructures } from "./procedural.js";
 
 const CHUNKS = [
   meadow,
@@ -27,6 +28,7 @@ const CHUNKS = [
   forktailJunction,
 ];
 const BUCKET_SIZE = 520;
+const generatedStructures = generatePlatformerStructures(34350);
 
 function flatten(key) {
   return CHUNKS.flatMap((chunk) => chunk[key] ?? []);
@@ -73,6 +75,7 @@ export const WORLD = {
   checkpoints: flatten("checkpoints"),
   caveZones: flatten("caveZones"),
   decorations: flatten("decorations"),
+  structures: generatedStructures,
 };
 
 WORLD.spatial = {
@@ -89,6 +92,7 @@ WORLD.spatial = {
   checkpoints: buildBuckets(WORLD.checkpoints),
   caveZones: buildBuckets(WORLD.caveZones),
   decorations: buildBuckets(WORLD.decorations),
+  structures: buildBuckets(WORLD.structures),
 };
 
 export function cameraMax() {

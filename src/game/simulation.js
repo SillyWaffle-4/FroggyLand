@@ -25,6 +25,7 @@ import {
   keys,
 } from "./constants.js";
 import { beep } from "./audio.js";
+import { BUILD_CATALOG, buildCurrencyLabel, getBuildItem } from "./building.js";
 import { WORLD, cameraMax, getItemsInRange, getRegionName } from "./world.js";
 import { clamp, lineCircleHit, rectsOverlap } from "./utils.js";
 
@@ -57,6 +58,9 @@ export function createInitialState() {
     collectedPickups: new Set(),
     collectedRelics: new Set(),
     placedPads: [],
+    placedBuilds: [],
+    buildInventory: Object.fromEntries(BUILD_CATALOG.map((item) => [item.id, 0])),
+    buildMode: null,
     placementMode: false,
     nearbyNpcId: null,
     notice: "Catch flies, trade with pond folk, and explore the open map.",
@@ -114,6 +118,7 @@ export function getActiveWorld(cameraX, frogX = cameraX) {
     checkpoints: getItemsInRange(WORLD.spatial.checkpoints, minX, maxX),
     caveZones: getItemsInRange(WORLD.spatial.caveZones, minX, maxX),
     decorations: getItemsInRange(WORLD.spatial.decorations, minX, maxX),
+    structures: getItemsInRange(WORLD.spatial.structures, minX, maxX),
   };
 }
 
@@ -361,6 +366,96 @@ export function placeLilyPad(state, pointer, soundOn) {
   return true;
 }
 
+export function buyBuildItem(state, itemId, soundOn) {
+  const item = getBuildItem(itemId);
+  if (!item) return false;
+  const available = getCurrency(state, item.currency);
+  if (available < item.cost) {
+    setNotice(state, `${item.name} costs ${item.cost} ${buildCurrencyLabel(item.currency)}. You have ${available}.`);
+    if (soundOn) beep(170, 0.04);
+    return false;
+  }
+  spendCurrency(state, item.currency, item.cost);
+  state.buildInventory[item.id] = (state.buildInventory[item.id] ?? 0) + 1;
+  state.buildMode = item.id;
+  state.placementMode = false;
+  setNotice(state, `${item.name} bought. Click near your frog to place it.`);
+  if (soundOn) beep(760, 0.05);
+  return true;
+}
+
+export function selectBuildItem(state, itemId) {
+  const item = getBuildItem(itemId);
+  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) {
+    state.buildMode = null;
+    setNotice(state, "Buy a decoration before placing it.");
+    return false;
+  }
+  state.buildMode = item.id;
+  state.placementMode = false;
+  setNotice(state, `Placing ${item.name}. Click the ground near you.`);
+  return true;
+}
+
+export function cancelBuildMode(state) {
+  state.buildMode = null;
+}
+
+export function placeBuildItem(state, pointer, soundOn) {
+  const item = getBuildItem(state.buildMode);
+  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) {
+    state.buildMode = null;
+    return false;
+  }
+
+  const frogCenterX = state.frog.x + FROG_WIDTH / 2;
+  if (Math.abs(pointer.x - frogCenterX) > 360) {
+    setNotice(state, "Stay closer to place house pieces and decorations.");
+    return false;
+  }
+
+  const groundY = findBuildGroundY(state, pointer.x);
+  if (!groundY) {
+    setNotice(state, "Place decorations on solid ground or platforms.");
+    return false;
+  }
+
+  const x = clamp(pointer.x - item.w / 2, 22, WORLD.worldWidth - item.w - 22);
+  const y = groundY - item.h;
+  const overlap = state.placedBuilds.some((placed) => (
+    rectsOverlap({ x, y, w: item.w, h: item.h }, { x: placed.x, y: placed.y, w: placed.w, h: placed.h })
+  ));
+  if (overlap) {
+    setNotice(state, "That piece needs a little more room.");
+    return false;
+  }
+
+  state.placedBuilds.push({
+    id: crypto.randomUUID(),
+    itemId: item.id,
+    x,
+    y,
+    w: item.w,
+    h: item.h,
+  });
+  state.buildInventory[item.id] -= 1;
+  state.buildMode = state.buildInventory[item.id] > 0 ? item.id : null;
+  setNotice(state, state.buildMode ? `${item.name} placed. Click to place another.` : `${item.name} placed. Your home is getting cozier.`);
+  addSplash(state, x + item.w / 2, y + item.h / 2, item.color);
+  if (soundOn) beep(640, 0.05);
+  return true;
+}
+
+function findBuildGroundY(state, x) {
+  const candidates = [
+    ...state.active.platforms,
+    ...state.active.lilypads,
+    ...state.placedPads,
+  ].filter((platform) => x >= platform.x - 10 && x <= platform.x + platform.w + 10);
+  if (!candidates.length) return null;
+  return candidates.reduce((best, platform) => Math.min(best, platform.y), VIEW_HEIGHT);
+}
+
 function updateFlies(state, dt) {
   const tongueFlyId = state.tongue.caughtFlyId;
   const minAnchorX = Math.min(state.cameraX, state.frog.x) - FLY_DESPAWN_MARGIN;
@@ -378,8 +473,14 @@ function updateFlies(state, dt) {
   }
   state.flies.length = writeIndex;
 
-  const localSpawnPoints = state.active.flySpawnPoints;
-  if (!localSpawnPoints.length || state.flies.length >= MAX_ACTIVE_FLIES) {
+  const localSpawnPoints = state.active.flySpawnPoints.filter((point) => (
+    Math.abs(point.x - state.frog.x) < VIEW_WIDTH * 0.72
+  ));
+  const localFlyCount = state.flies.filter((fly) => (
+    Math.abs(fly.anchorX - state.frog.x) < VIEW_WIDTH * 0.72
+  )).length;
+
+  if (!localSpawnPoints.length || state.flies.length >= MAX_ACTIVE_FLIES || localFlyCount >= MIN_LOCAL_FLIES + 1) {
     state.flySpawnCooldown = Math.min(state.flySpawnCooldown, FLY_REFILL_INTERVAL);
     return;
   }
@@ -398,9 +499,9 @@ function updateFlies(state, dt) {
   if (point) {
     state.flies.push(makeFly(point));
   }
-  state.flySpawnCooldown = state.flies.length < MIN_LOCAL_FLIES
+  state.flySpawnCooldown = localFlyCount < MIN_LOCAL_FLIES
     ? FLY_REFILL_INTERVAL
-    : 0.9 + Math.random() * 0.8;
+    : 2.4 + Math.random() * 1.8;
 }
 
 function updateCheckpoint(state, soundOn) {

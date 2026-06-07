@@ -5,6 +5,7 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from "./constants.js";
+import { getBuildItem } from "./building.js";
 import { WORLD } from "./world.js";
 import { clamp, isPointVisible, isRectVisible, roundRect } from "./utils.js";
 
@@ -20,8 +21,11 @@ export function drawGame(ctx, state) {
   drawWater(ctx, state.active.waterZones, state.time, cameraX);
   drawPlatforms(ctx, state.active.platforms, cameraX);
   drawDecorations(ctx, state.active.decorations, cameraX);
+  drawGeneratedStructures(ctx, state.active.structures, cameraX);
+  drawPlacedBuilds(ctx, state.placedBuilds, cameraX);
   drawLilypads(ctx, state, state.time, cameraX);
   drawPlacementPreview(ctx, state);
+  drawBuildPreview(ctx, state);
   drawMessages(ctx, state, state.active.messages, cameraX);
   drawCurrencyPickups(ctx, state, cameraX);
   drawRelics(ctx, state, state.active.relics, cameraX);
@@ -191,6 +195,152 @@ function drawDecorations(ctx, decorations, cameraX) {
     ctx.fillRect(item.x, item.y - 34, 6, 34);
     ctx.fillRect(item.x + 16, item.y - 26, 6, 26);
   }
+}
+
+function drawGeneratedStructures(ctx, structures, cameraX) {
+  for (const item of structures) {
+    if (!isRectVisible(cameraX, item.x, item.w, 110)) {
+      continue;
+    }
+    if (item.type === "watchtower") {
+      ctx.fillStyle = "#7a5938";
+      ctx.fillRect(item.x + 18, item.y + 18, 14, 86);
+      ctx.fillRect(item.x + 76, item.y + 18, 14, 86);
+      ctx.fillStyle = "#caa46c";
+      roundRect(ctx, item.x, item.y, 112, 28, 6);
+      ctx.fill();
+      ctx.fillStyle = "#df6756";
+      ctx.beginPath();
+      ctx.moveTo(item.x - 8, item.y + 2);
+      ctx.lineTo(item.x + 56, item.y - 34);
+      ctx.lineTo(item.x + 120, item.y + 2);
+      ctx.closePath();
+      ctx.fill();
+      continue;
+    }
+    if (item.type === "brokenArch") {
+      ctx.strokeStyle = "#7f887d";
+      ctx.lineWidth = 18;
+      ctx.beginPath();
+      ctx.arc(item.x + 74, item.y, 58, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#68746d";
+      ctx.fillRect(item.x + 8, item.y - 4, 28, 82);
+      ctx.fillRect(item.x + 118, item.y - 4, 28, 82);
+      continue;
+    }
+    if (item.type === "marketStall") {
+      ctx.fillStyle = "#8f5a2e";
+      ctx.fillRect(item.x + 12, item.y - 56, 12, 56);
+      ctx.fillRect(item.x + 84, item.y - 56, 12, 56);
+      ctx.fillStyle = "#fff1a8";
+      roundRect(ctx, item.x + 5, item.y - 36, 102, 28, 6);
+      ctx.fill();
+      ctx.fillStyle = "#df6756";
+      ctx.fillRect(item.x + 10, item.y - 36, 20, 28);
+      ctx.fillRect(item.x + 54, item.y - 36, 20, 28);
+      continue;
+    }
+    if (item.type === "stoneNest") {
+      ctx.fillStyle = "#7f887d";
+      ctx.beginPath();
+      ctx.ellipse(item.x + 54, item.y - 16, 54, 24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#a7f3ff";
+      ctx.beginPath();
+      ctx.arc(item.x + 44, item.y - 27, 10, 0, Math.PI * 2);
+      ctx.arc(item.x + 62, item.y - 28, 9, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    ctx.fillStyle = "#66452d";
+    ctx.fillRect(item.x + 48, item.y - 72, 10, 72);
+    ctx.fillStyle = "#ffe27a";
+    roundRect(ctx, item.x + 12, item.y - 72, 76, 34, 6);
+    ctx.fill();
+  }
+}
+
+function drawPlacedBuilds(ctx, placedBuilds, cameraX) {
+  for (const placed of placedBuilds) {
+    const item = getBuildItem(placed.itemId);
+    if (!item || !isRectVisible(cameraX, placed.x, placed.w, 90)) {
+      continue;
+    }
+    drawBuildPiece(ctx, item, placed.x, placed.y, placed.w, placed.h, 1);
+  }
+}
+
+function drawBuildPreview(ctx, state) {
+  const item = getBuildItem(state.buildMode);
+  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) {
+    return;
+  }
+  const pointer = state.pointer;
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  drawBuildPiece(ctx, item, pointer.x - item.w / 2, pointer.y - item.h / 2, item.w, item.h, 0.8);
+  ctx.restore();
+}
+
+function drawBuildPiece(ctx, item, x, y, w, h, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  if (item.kind === "roof") {
+    ctx.fillStyle = item.color;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y + h);
+    ctx.lineTo(x + w / 2, y);
+    ctx.lineTo(x + w + 8, y + h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = item.accent;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  } else if (item.kind === "window") {
+    ctx.fillStyle = item.color;
+    roundRect(ctx, x, y, w, h, 8);
+    ctx.fill();
+    ctx.strokeStyle = item.accent;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2, y + 4);
+    ctx.lineTo(x + w / 2, y + h - 4);
+    ctx.moveTo(x + 4, y + h / 2);
+    ctx.lineTo(x + w - 4, y + h / 2);
+    ctx.stroke();
+  } else if (item.kind === "plant") {
+    ctx.strokeStyle = item.accent;
+    ctx.lineWidth = 5;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y + h);
+      ctx.quadraticCurveTo(x + 8 + i * 10, y + h * 0.45, x + 4 + i * 11, y + 8);
+      ctx.stroke();
+    }
+    ctx.fillStyle = item.color;
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + h - 5, w / 2, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (item.kind === "decor") {
+    ctx.strokeStyle = item.accent;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2, y);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.stroke();
+    ctx.fillStyle = item.color;
+    roundRect(ctx, x + 5, y + 16, w - 10, 24, 7);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = item.color;
+    roundRect(ctx, x, y, w, h, 7);
+    ctx.fill();
+    ctx.fillStyle = item.accent;
+    ctx.fillRect(x + w / 2 - 8, y + h - 24, 16, 24);
+  }
+  ctx.restore();
 }
 
 function drawLilypads(ctx, state, time, cameraX) {
