@@ -74,7 +74,7 @@ export const lanternCoast = {
     { x: 24470, y: 475, w: 250, text: "Lantern Coast" },
     { x: 25520, y: 248, w: 300, text: "Last high pearl route" },
     { x: 26935, y: 344, w: 320, text: "Lamplighter trades final pads" },
-    { x: 27300, y: 474, w: 270, text: "Frog shrine" },
+    { x: 27300, y: 474, w: 270, text: "City road ahead" },
   ],
   checkpoints: [
     { id: "coast-lamp", x: 26195, y: 340, spawnX: 26195, spawnY: 340 - FROG_HEIGHT },

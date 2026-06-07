@@ -9,6 +9,7 @@ import { windbellRidge } from "./maps/windbellRidge.js";
 import { mistfallSteps } from "./maps/mistfallSteps.js";
 import { lockrootHollow } from "./maps/lockrootHollow.js";
 import { lanternCoast } from "./maps/lanternCoast.js";
+import { urbanCauseway } from "./maps/urbanCauseway.js";
 
 const CHUNKS = [
   meadow,
@@ -21,6 +22,7 @@ const CHUNKS = [
   mistfallSteps,
   lockrootHollow,
   lanternCoast,
+  urbanCauseway,
 ];
 const BUCKET_SIZE = 520;
 
@@ -52,9 +54,9 @@ function buildBuckets(items) {
 
 export const WORLD = {
   name: "Froggy Wilds",
-  worldWidth: 27450,
+  worldWidth: 30950,
   spawn: { x: 86, y: 498 },
-  goal: { x: 27355, y: 345 },
+  goal: { x: 30775, y: 345 },
   regions: CHUNKS.map(({ name, startX, endX }) => ({ name, startX, endX })),
   platforms: flatten("platforms"),
   waterZones: flatten("waterZones"),
@@ -64,6 +66,7 @@ export const WORLD = {
   relics: flatten("relics"),
   pearls: flatten("pearls"),
   amberCoins: flatten("amberCoins"),
+  cars: flatten("cars"),
   messages: flatten("messages"),
   checkpoints: flatten("checkpoints"),
   caveZones: flatten("caveZones"),
@@ -79,6 +82,7 @@ WORLD.spatial = {
   relics: buildBuckets(WORLD.relics),
   pearls: buildBuckets(WORLD.pearls),
   amberCoins: buildBuckets(WORLD.amberCoins),
+  cars: buildBuckets(WORLD.cars),
   messages: buildBuckets(WORLD.messages),
   checkpoints: buildBuckets(WORLD.checkpoints),
   caveZones: buildBuckets(WORLD.caveZones),

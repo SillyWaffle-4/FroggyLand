@@ -27,6 +27,7 @@ export function drawGame(ctx, state) {
   drawRelics(ctx, state, state.active.relics, cameraX);
   drawNpcs(ctx, state, state.active.npcs, cameraX);
   drawFlies(ctx, state.flies, state.time, cameraX);
+  drawCars(ctx, state.active.cars, state.time, cameraX);
   drawTongue(ctx, state);
   drawFrog(ctx, state.frog, state.time);
   drawParticles(ctx, state.particles, cameraX);
@@ -132,12 +133,23 @@ function drawPlatforms(ctx, platforms, cameraX) {
     const isGround = platform.type === "ground";
     const isCave = platform.type === "cave";
     const isMoss = platform.type === "moss";
-    ctx.fillStyle = isGround ? "#765b35" : isCave ? "#3d332d" : platform.type === "stone" ? "#737a77" : "#5b8f3a";
+    const isRoad = platform.type === "road";
+    ctx.fillStyle = isGround ? "#765b35" : isCave ? "#3d332d" : isRoad ? "#343a3d" : platform.type === "stone" ? "#737a77" : "#5b8f3a";
     roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 8);
     ctx.fill();
-    ctx.fillStyle = isGround ? "#70b34a" : isCave ? "#6b5a4e" : isMoss ? "#73ad58" : platform.type === "stone" ? "#a8b1a9" : "#8ed05c";
+    ctx.fillStyle = isGround ? "#70b34a" : isCave ? "#6b5a4e" : isRoad ? "#4b5255" : isMoss ? "#73ad58" : platform.type === "stone" ? "#a8b1a9" : "#8ed05c";
     roundRect(ctx, platform.x, platform.y, platform.w, Math.min(16, platform.h), 8);
     ctx.fill();
+    if (isRoad) {
+      ctx.strokeStyle = "rgba(255, 223, 93, 0.82)";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([34, 26]);
+      ctx.beginPath();
+      ctx.moveTo(platform.x + 18, platform.y + 40);
+      ctx.lineTo(platform.x + platform.w - 18, platform.y + 40);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 }
 
@@ -415,6 +427,55 @@ function drawFlies(ctx, flies, time, cameraX) {
     ctx.fill();
     ctx.restore();
   }
+}
+
+function drawCars(ctx, cars, time, cameraX) {
+  for (const car of cars) {
+    const rect = getCarRect(car, time);
+    if (!isRectVisible(cameraX, rect.x, rect.w, 120)) {
+      continue;
+    }
+
+    ctx.save();
+    ctx.translate(rect.x, rect.y);
+    ctx.fillStyle = "rgba(16, 27, 25, 0.24)";
+    ctx.beginPath();
+    ctx.ellipse(rect.w / 2, rect.h + 4, rect.w / 2, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = car.color ?? "#e65b4f";
+    roundRect(ctx, 0, 4, rect.w, rect.h - 4, 8);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+    roundRect(ctx, 18, 0, rect.w - 36, 18, 6);
+    ctx.fill();
+    ctx.fillStyle = "#1b2830";
+    ctx.beginPath();
+    ctx.arc(18, rect.h, 8, 0, Math.PI * 2);
+    ctx.arc(rect.w - 18, rect.h, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffef9a";
+    const headlightX = car.direction === -1 ? 6 : rect.w - 12;
+    ctx.fillRect(headlightX, 15, 6, 8);
+    ctx.restore();
+  }
+}
+
+function getCarRect(car, time) {
+  const carWidth = car.carW ?? 86;
+  const laneLength = Math.max(carWidth, car.w - carWidth);
+  const cycle = laneLength / car.speed;
+  const shiftedTime = (time + (car.offset ?? 0) * cycle) % cycle;
+  const progress = shiftedTime / cycle;
+  const rawX = car.direction === -1
+    ? car.x + laneLength - progress * laneLength
+    : car.x + progress * laneLength;
+  return {
+    x: rawX,
+    y: car.y,
+    w: carWidth,
+    h: car.h,
+  };
 }
 
 function drawTongue(ctx, state) {

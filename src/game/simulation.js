@@ -109,6 +109,7 @@ export function getActiveWorld(cameraX, frogX = cameraX) {
     relics: getItemsInRange(WORLD.spatial.relics, minX, maxX),
     pearls: getItemsInRange(WORLD.spatial.pearls, minX, maxX),
     amberCoins: getItemsInRange(WORLD.spatial.amberCoins, minX, maxX),
+    cars: getItemsInRange(WORLD.spatial.cars, minX, maxX),
     messages: getItemsInRange(WORLD.spatial.messages, minX, maxX),
     checkpoints: getItemsInRange(WORLD.spatial.checkpoints, minX, maxX),
     caveZones: getItemsInRange(WORLD.spatial.caveZones, minX, maxX),
@@ -181,6 +182,7 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   updateCheckpoint(state, soundOn);
   updateCurrencyPickups(state, soundOn);
   updateRelics(state, soundOn);
+  updateCarHazards(state, soundOn);
   state.nearbyNpcId = findNearbyNpc(state)?.id ?? null;
 
   if (state.noticeTimer <= 0) {
@@ -467,6 +469,37 @@ function updateGoal(state, soundOn) {
     addSplash(state, WORLD.goal.x + 36, WORLD.goal.y + 48, "#ffdf5d");
     if (soundOn) beep(880, 0.05);
   }
+}
+
+function updateCarHazards(state, soundOn) {
+  const frogRect = { x: state.frog.x + 6, y: state.frog.y + 6, w: FROG_WIDTH - 12, h: FROG_HEIGHT - 8 };
+  for (const car of state.active.cars) {
+    const carRect = getCarRect(car, state.time);
+    if (rectsOverlap(frogRect, carRect)) {
+      setNotice(state, "A car crashed into you. Check the lane timing before crossing.", 2.8);
+      addSplash(state, state.frog.x + FROG_WIDTH / 2, state.frog.y + FROG_HEIGHT / 2, "#ff7e67");
+      if (soundOn) beep(140, 0.08);
+      respawnFrog(state);
+      return;
+    }
+  }
+}
+
+function getCarRect(car, time) {
+  const carWidth = car.carW ?? 86;
+  const laneLength = Math.max(carWidth, car.w - carWidth);
+  const cycle = laneLength / car.speed;
+  const shiftedTime = (time + (car.offset ?? 0) * cycle) % cycle;
+  const progress = shiftedTime / cycle;
+  const rawX = car.direction === -1
+    ? car.x + laneLength - progress * laneLength
+    : car.x + progress * laneLength;
+  return {
+    x: rawX,
+    y: car.y,
+    w: carWidth,
+    h: car.h,
+  };
 }
 
 export function respawnFrog(state) {
