@@ -631,11 +631,12 @@ function drawCheckpoints(ctx, state, checkpoints, cameraX) {
       continue;
     }
     const active = state.activeCheckpoint?.id === checkpoint.id;
+    const endSection = checkpoint.endSection;
     const glow = active ? 0.8 + Math.sin(state.time * 8) * 0.12 : 0;
 
-    if (active || state.checkpointFlash > 0) {
+    if (active || endSection || state.checkpointFlash > 0) {
       ctx.globalAlpha = active ? Math.max(glow, state.checkpointFlash) : 0.15;
-      ctx.fillStyle = "#ffdf5d";
+      ctx.fillStyle = endSection ? "#ff7e67" : "#ffdf5d";
       ctx.beginPath();
       ctx.arc(checkpoint.x + 6, checkpoint.y - 76, 42, 0, Math.PI * 2);
       ctx.fill();
@@ -644,7 +645,7 @@ function drawCheckpoints(ctx, state, checkpoints, cameraX) {
 
     ctx.fillStyle = "#5a3f2c";
     ctx.fillRect(checkpoint.x, checkpoint.y - 94, 10, 94);
-    ctx.fillStyle = active ? "#ffdf5d" : "#8ac8ff";
+    ctx.fillStyle = endSection ? "#ff7e67" : active ? "#ffdf5d" : "#8ac8ff";
     ctx.beginPath();
     ctx.moveTo(checkpoint.x + 10, checkpoint.y - 94);
     ctx.lineTo(checkpoint.x + 86, checkpoint.y - 72);
@@ -655,6 +656,12 @@ function drawCheckpoints(ctx, state, checkpoints, cameraX) {
     ctx.beginPath();
     ctx.arc(checkpoint.x + 32, checkpoint.y - 73, 8, 0, Math.PI * 2);
     ctx.fill();
+    if (endSection) {
+      ctx.fillStyle = "#3b1715";
+      ctx.font = "900 13px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("END", checkpoint.x + 42, checkpoint.y - 68);
+    }
   }
 }
 

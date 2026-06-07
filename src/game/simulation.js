@@ -43,11 +43,20 @@ function makeFly(point, ageOffset = 0) {
   };
 }
 
-export function createInitialState() {
-  const starterPoints = WORLD.flySpawnPoints.slice(0, MAX_ACTIVE_FLIES);
+export function createInitialState(options = {}) {
+  const section = options.section ?? null;
+  const spawn = section
+    ? { x: section.spawnX, y: section.spawnY }
+    : WORLD.spawn;
+  const cameraX = clamp(spawn.x + FROG_WIDTH / 2 - VIEW_WIDTH * 0.42, 0, cameraMax());
+  const active = getActiveWorld(cameraX, spawn.x, section);
+  const starterPoints = active.flySpawnPoints.slice(0, MAX_ACTIVE_FLIES);
   return {
     time: 0,
-    cameraX: 0,
+    cameraX,
+    section,
+    sectionComplete: false,
+    forceTopDownReturn: false,
     score: 0,
     pearls: 0,
     amber: 0,
@@ -62,16 +71,16 @@ export function createInitialState() {
     notice: "Catch flies, trade with pond folk, and explore the open map.",
     noticeTimer: 3.2,
     tutorialComplete: false,
-    pointer: { x: WORLD.spawn.x, y: WORLD.spawn.y },
+    pointer: { x: spawn.x, y: spawn.y },
     reachedGoal: false,
     activeCheckpoint: null,
     checkpointFlash: 0,
     flySpawnCooldown: 1.5,
-    regionName: getRegionName(WORLD.spawn.x),
-    active: getActiveWorld(0, WORLD.spawn.x),
+    regionName: section?.name ?? getRegionName(spawn.x),
+    active,
     frog: {
-      x: WORLD.spawn.x,
-      y: WORLD.spawn.y,
+      x: spawn.x,
+      y: spawn.y,
       vx: 0,
       vy: 0,
       facing: 1,
@@ -90,17 +99,17 @@ export function createInitialState() {
       targetLength: 0,
       angle: 0,
       caughtFlyId: null,
-      tipX: WORLD.spawn.x,
-      tipY: WORLD.spawn.y,
+      tipX: spawn.x,
+      tipY: spawn.y,
     },
     particles: [],
   };
 }
 
-export function getActiveWorld(cameraX, frogX = cameraX) {
+export function getActiveWorld(cameraX, frogX = cameraX, section = null) {
   const minX = Math.min(cameraX, frogX) - ACTIVE_MARGIN;
   const maxX = Math.max(cameraX + VIEW_WIDTH, frogX) + ACTIVE_MARGIN;
-  return {
+  const active = {
     platforms: getItemsInRange(WORLD.spatial.platforms, minX, maxX),
     waterZones: getItemsInRange(WORLD.spatial.waterZones, minX, maxX),
     lilypads: getItemsInRange(WORLD.spatial.lilypads, minX, maxX),
@@ -116,6 +125,13 @@ export function getActiveWorld(cameraX, frogX = cameraX) {
     decorations: getItemsInRange(WORLD.spatial.decorations, minX, maxX),
     structures: getItemsInRange(WORLD.spatial.structures, minX, maxX),
   };
+  if (section?.endCheckpoint && section.endCheckpoint.x >= minX && section.endCheckpoint.x <= maxX) {
+    active.checkpoints = [
+      section.endCheckpoint,
+      ...active.checkpoints.filter((checkpoint) => checkpoint.id !== section.endCheckpoint.id),
+    ];
+  }
+  return active;
 }
 
 export function findNearbyNpc(state) {
@@ -170,12 +186,16 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   frog.vy += GRAVITY * dt;
   frog.x += frog.vx * dt;
   frog.y += frog.vy * dt;
-  frog.x = clamp(frog.x, 18, WORLD.worldWidth - FROG_WIDTH - 20);
+  frog.x = clamp(
+    frog.x,
+    sectionLeftBound(state),
+    sectionRightBound(state),
+  );
   if (frog.x >= TUTORIAL_END_X) {
     state.tutorialComplete = true;
   }
 
-  state.active = getActiveWorld(state.cameraX, frog.x);
+  state.active = getActiveWorld(state.cameraX, frog.x, state.section);
   resolveTerrain(state, previousY);
   updateFlies(state, dt);
   updateTongue(state, pointer, dt, soundOn);
@@ -198,8 +218,8 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   }
 
   state.cameraX = clamp(frog.x + FROG_WIDTH / 2 - VIEW_WIDTH * 0.42, 0, cameraMax());
-  state.regionName = getRegionName(frog.x + FROG_WIDTH / 2);
-  state.active = getActiveWorld(state.cameraX, frog.x);
+  state.regionName = state.section?.name ?? getRegionName(frog.x + FROG_WIDTH / 2);
+  state.active = getActiveWorld(state.cameraX, frog.x, state.section);
   updateGoal(state, soundOn);
 
   if (frog.y > VIEW_HEIGHT + 240) {
@@ -413,6 +433,21 @@ function updateCheckpoint(state, soundOn) {
   for (const checkpoint of state.active.checkpoints) {
     const checkpointRect = { x: checkpoint.x - 28, y: checkpoint.y - 86, w: 56, h: 100 };
     if (rectsOverlap(frogRect, checkpointRect)) {
+      if (checkpoint.endSection) {
+        state.sectionComplete = true;
+        state.forceTopDownReturn = checkpoint.forceReturn !== false;
+        state.checkpointFlash = 1.5;
+        setNotice(
+          state,
+          checkpoint.forceReturn === false
+            ? `${state.section?.name ?? "Platformer section"} cleared. The room is open.`
+            : `${state.section?.name ?? "Platformer section"} cleared. Returning to top-down.`,
+          2.4,
+        );
+        addSplash(state, checkpoint.x, checkpoint.y - 38, "#ff7e67");
+        if (soundOn) beep(880, 0.06);
+        return;
+      }
       if (state.activeCheckpoint?.id !== checkpoint.id) {
         state.activeCheckpoint = checkpoint;
         state.checkpointFlash = 1.5;
@@ -510,7 +545,9 @@ function getCarRect(car, time) {
 export function respawnFrog(state) {
   const spawn = state.activeCheckpoint
     ? { x: state.activeCheckpoint.spawnX, y: state.activeCheckpoint.spawnY }
-    : WORLD.spawn;
+    : state.section
+      ? { x: state.section.spawnX, y: state.section.spawnY }
+      : WORLD.spawn;
 
   state.frog = {
     x: spawn.x,
@@ -527,8 +564,18 @@ export function respawnFrog(state) {
   state.tongue.caughtFlyId = null;
   state.tongueCooldown = TONGUE_COOLDOWN;
   state.cameraX = clamp(state.frog.x + FROG_WIDTH / 2 - VIEW_WIDTH * 0.42, 0, cameraMax());
-  state.active = getActiveWorld(state.cameraX, state.frog.x);
+  state.active = getActiveWorld(state.cameraX, state.frog.x, state.section);
   addSplash(state, spawn.x + FROG_WIDTH / 2, spawn.y + FROG_HEIGHT, state.activeCheckpoint ? "#ffdf5d" : "#bff5ff");
+}
+
+function sectionLeftBound(state) {
+  return state.section ? Math.max(18, state.section.startX) : 18;
+}
+
+function sectionRightBound(state) {
+  return state.section
+    ? Math.min(WORLD.worldWidth - FROG_WIDTH - 20, state.section.endX + 22)
+    : WORLD.worldWidth - FROG_WIDTH - 20;
 }
 
 export function startTongue(state, pointer) {

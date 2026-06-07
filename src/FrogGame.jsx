@@ -11,6 +11,7 @@ import {
   tradeWithNearbyNpc,
   updateGame,
 } from "./game/simulation.js";
+import { randomPlatformerSection, shopPlatformerSection } from "./game/platformerSections.js";
 import { FURNITURE_SHOP_ITEMS, PICKAXES } from "./game/topDownMode.js";
 
 const HOUSE_PARTS = [
@@ -40,17 +41,23 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
   const isParkourEntry = entry.startsWith("parkour");
   const isShopEntry = entry === "shop";
   const banksPlatformerLoot = isParkourEntry || isShopEntry;
+  const platformerSection = React.useMemo(() => {
+    if (isParkourEntry) return randomPlatformerSection(entry);
+    if (isShopEntry) return shopPlatformerSection();
+    return null;
+  }, [entry, isParkourEntry, isShopEntry]);
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
   const progressRef = React.useRef(progress);
   const stateRef = React.useRef(null);
+  const sectionReturnQueuedRef = React.useRef(false);
   if (!stateRef.current) {
-    stateRef.current = createInitialState();
+    stateRef.current = createInitialState({ section: platformerSection });
     if (isParkourEntry) {
-      stateRef.current.notice = "Parkour House: clear the short section to earn one furniture part.";
+      stateRef.current.notice = `Parkour House: ${platformerSection.name} is a short room. Reach the red END checkpoint for a reward.`;
       stateRef.current.noticeTimer = 4;
     } else if (isShopEntry) {
-      stateRef.current.notice = "Market Hall: clear the short platformer room to unlock the shop counter.";
+      stateRef.current.notice = "Market Hall: reach the red END checkpoint to unlock the shop counter.";
       stateRef.current.noticeTimer = 4;
     }
   }
@@ -120,6 +127,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     let lastFrame = last;
     let hudTimer = 0;
     let lastHudKey = "";
+    let autoExitId = null;
 
     const tick = (now) => {
       if (document.hidden) {
@@ -147,6 +155,16 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       }
       drawGame(context, stateRef.current);
 
+      if (stateRef.current.forceTopDownReturn && !sectionReturnQueuedRef.current) {
+        sectionReturnQueuedRef.current = true;
+        autoExitId = window.setTimeout(() => {
+          if (banksPlatformerLoot) {
+            bankPlatformerLoot(stateRef.current, onProgressChange);
+          }
+          onExitToTopDown?.();
+        }, 450);
+      }
+
       hudTimer += dt;
       if (hudTimer > 0.2) {
         hudTimer = 0;
@@ -161,8 +179,11 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     };
 
     frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [banksPlatformerLoot, entry, isParkourEntry, isShopEntry, onProgressChange]);
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (autoExitId) window.clearTimeout(autoExitId);
+    };
+  }, [banksPlatformerLoot, entry, isParkourEntry, isShopEntry, onExitToTopDown, onProgressChange]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -347,7 +368,7 @@ function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
 
 function grantParkourReward(state, entry, progress, onProgressChange) {
   const reward = getParkourReward(entry);
-  if (state.parkourRewarded || state.frog.x < PARKOUR_GOAL_X || progress.rewards?.[reward.id]) {
+  if (state.parkourRewarded || !platformerObjectiveReached(state, PARKOUR_GOAL_X) || progress.rewards?.[reward.id]) {
     return;
   }
   state.parkourRewarded = true;
@@ -364,10 +385,14 @@ function grantParkourReward(state, entry, progress, onProgressChange) {
 }
 
 function unlockMarketCounter(state) {
-  if (state.shopUnlocked || state.frog.x < SHOP_GOAL_X) return;
+  if (state.shopUnlocked || !platformerObjectiveReached(state, SHOP_GOAL_X)) return;
   state.shopUnlocked = true;
   state.notice = "Market counter unlocked. Buy upgrades, trade, or shop furniture.";
   state.noticeTimer = 3.4;
+}
+
+function platformerObjectiveReached(state, fallbackX) {
+  return state.section ? state.sectionComplete : state.frog.x >= fallbackX;
 }
 
 function bankPlatformerLoot(state, onProgressChange) {
