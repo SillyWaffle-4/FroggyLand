@@ -8,21 +8,37 @@ function rand(seed) {
   };
 }
 
+// Simplified 2D noise for biome variation
+function simpleNoise2D(x, y, seed) {
+  const rng = rand(seed ^ Math.floor(x) ^ (Math.floor(y) * 73856093));
+  const fractal = rng() * 0.5 + rng() * 0.25 + rng() * 0.25;
+  return fractal;
+}
+
 export function generatePlatformerStructures(worldWidth, seed = 707) {
   const next = rand(seed);
   const structures = [];
   const types = ["watchtower", "brokenArch", "marketStall", "stoneNest", "roadSign"];
-  for (let x = 620; x < worldWidth - 700; x += 760 + Math.floor(next() * 430)) {
+  const colors = ["#c6a16b", "#8e9c84", "#a67c6d", "#7a9b6b", "#b8955f"];
+  const detailLevels = ["ornate", "weathered", "pristine"];
+  
+  for (let x = 620; x < worldWidth - 700; x += 620 + Math.floor(next() * 580)) {
     const type = types[Math.floor(next() * types.length)];
     const y = type === "watchtower" ? GROUND_Y - 104 : GROUND_Y;
+    const color = colors[Math.floor(next() * colors.length)];
+    const detail = detailLevels[Math.floor(next() * detailLevels.length)];
+    
     structures.push({
       id: `p-${structures.length}`,
       type,
-      x: x + Math.floor(next() * 180),
+      x: x + Math.floor(next() * 140),
       y,
-      w: type === "brokenArch" ? 150 : 112,
-      h: type === "watchtower" ? 112 : 76,
-      color: next() > 0.5 ? "#c6a16b" : "#8e9c84",
+      w: type === "brokenArch" ? 150 : type === "marketStall" ? 102 : 112,
+      h: type === "watchtower" ? 112 : type === "marketStall" ? 82 : 76,
+      color,
+      detail,
+      rotation: type === "brokenArch" ? (next() > 0.5 ? -8 : 8) : 0,
+      seed: Math.floor(next() * 1000000),
     });
   }
   return structures;
@@ -66,7 +82,7 @@ function chooseWallMaterial(next) {
 }
 
 function chooseCityColor(next) {
-  const colors = ["#667780", "#7b7870", "#5f7782", "#748189", "#697982"];
+  const colors = ["#667780", "#7b7870", "#5f7782", "#748189", "#697982", "#5e7175"];
   return colors[Math.floor(next() * colors.length)];
 }
 
@@ -100,6 +116,14 @@ function mergeRects(rects, margin = 18) {
   return merged;
 }
 
+// Determine biome density for a chunk
+function getBiomeDensity(chunkX, chunkY, seed) {
+  const noise = simpleNoise2D(chunkX * 0.3, chunkY * 0.3, seed + 42);
+  if (noise < 0.25) return "sparse";
+  if (noise < 0.6) return "normal";
+  return "dense";
+}
+
 export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   const chunkRect = {
     x: chunkX * TOP_DOWN_CHUNK_SIZE,
@@ -116,6 +140,7 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
       lilyPads: [],
       structures: [],
       pickups: [],
+      foliage: [],
     };
   }
 
@@ -124,21 +149,34 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     return generateUrbanChunk(chunkX, chunkY, next);
   }
 
+  const density = getBiomeDensity(chunkX, chunkY, seed);
   const walls = [];
   const water = [];
   const lilyPads = [];
   const structures = [];
   const pickups = [];
+  const foliage = [];
   const baseX = chunkRect.x;
   const baseY = chunkRect.y;
 
-  const wallCount = 1 + Math.floor(next() * 3);
+  // Adaptive wall generation based on density
+  const wallCountMap = { sparse: 0.5, normal: 1.2, dense: 1.8 };
+  const wallCount = Math.max(0, Math.floor(wallCountMap[density] + next() * 2.5));
+  
   for (let i = 0; i < wallCount; i += 1) {
     let wall = null;
-    for (let attempt = 0; attempt < 5 && !wall; attempt += 1) {
+    for (let attempt = 0; attempt < 6 && !wall; attempt += 1) {
       const horizontal = next() > 0.5;
-      const w = horizontal ? 500 + Math.floor(next() * 260) : 126 + Math.floor(next() * 62);
-      const h = horizontal ? 126 + Math.floor(next() * 62) : 500 + Math.floor(next() * 260);
+      const minSize = density === "sparse" ? 400 : 300;
+      const maxSize = density === "dense" ? 700 : 600;
+      
+      const w = horizontal 
+        ? minSize + Math.floor(next() * (maxSize - minSize)) 
+        : 100 + Math.floor(next() * 80);
+      const h = horizontal 
+        ? 100 + Math.floor(next() * 80) 
+        : minSize + Math.floor(next() * (maxSize - minSize));
+        
       const candidate = {
         id: `wall-${chunkX}-${chunkY}-${i}`,
         type: "wall",
@@ -147,33 +185,35 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
         y: clampToWorld(baseY + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 200)), h),
         w,
         h,
-        color: next() > 0.45 ? "#6f7b75" : "#8b8172",
+        color: next() > 0.4 ? "#6f7b75" : "#8b8172",
         mineable: true,
+        detail: next() > 0.6 ? "rough" : "smooth",
       };
-      if (!walls.some((existing) => rectsTouch(existing, candidate, 90))) {
+      if (!walls.some((existing) => rectsTouch(existing, candidate, 100))) {
         wall = candidate;
       }
     }
     if (!wall) continue;
     walls.push(wall);
 
-    if (next() < 0.6) {
+    // Water features adjacent to walls with increased frequency
+    if (next() < (density === "dense" ? 0.7 : 0.6)) {
       const side = next() > 0.5 ? "horizontal" : "vertical";
       const waterRect = side === "horizontal"
         ? {
             id: `wall-water-${chunkX}-${chunkY}-${i}`,
             type: "water",
             x: clampToWorld(wall.x - 42, wall.w + 84),
-            y: clampToWorld(wall.y + wall.h + 22, 112),
+            y: clampToWorld(wall.y + wall.h + 22, 120),
             w: wall.w + 84,
-            h: 112,
+            h: 120,
           }
         : {
             id: `wall-water-${chunkX}-${chunkY}-${i}`,
             type: "water",
-            x: clampToWorld(wall.x + wall.w + 22, 118),
+            x: clampToWorld(wall.x + wall.w + 22, 120),
             y: clampToWorld(wall.y - 36, wall.h + 72),
-            w: 118,
+            w: 120,
             h: wall.h + 72,
           };
       water.push(waterRect);
@@ -186,10 +226,18 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     }
   }
 
-  const waterCount = 2 + Math.floor(next() * 3);
+  // Density-based standalone pool generation
+  const waterCountMap = { sparse: 1.5, normal: 2.5, dense: 4.2 };
+  const waterCount = Math.floor(waterCountMap[density] + next() * 2.5);
+  
   for (let i = 0; i < waterCount; i += 1) {
-    const w = 180 + Math.floor(next() * 280);
-    const h = 120 + Math.floor(next() * 210);
+    const minW = density === "sparse" ? 150 : 180;
+    const maxW = density === "dense" ? 350 : 280;
+    const w = minW + Math.floor(next() * (maxW - minW));
+    const minH = density === "sparse" ? 100 : 120;
+    const maxH = density === "dense" ? 280 : 210;
+    const h = minH + Math.floor(next() * (maxH - minH));
+    
     const pool = {
       id: `pool-${chunkX}-${chunkY}-${i}`,
       type: "water",
@@ -197,9 +245,11 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
       y: clampToWorld(baseY + 70 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 120)), h),
       w,
       h,
+      murky: density === "dense" && next() > 0.5,
     };
     water.push(pool);
-    if (next() > 0.25) {
+    
+    if (next() > (density === "sparse" ? 0.4 : 0.25)) {
       lilyPads.push({
         id: `pool-pad-${chunkX}-${chunkY}-${i}`,
         x: pool.x + pool.w * (0.25 + next() * 0.5),
@@ -209,10 +259,16 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     }
   }
 
-  if (next() > 0.35) {
-    const type = ["hut", "ruin", "garden", "cart", "parkourHouse"][Math.floor(next() * 5)];
-    const w = type === "garden" ? 136 : 76 + Math.floor(next() * 58);
-    const h = type === "garden" ? 106 : 64 + Math.floor(next() * 54);
+  // POI clustering for structures
+  const structureCountMap = { sparse: 0.3, normal: 0.65, dense: 1.2 };
+  const shouldCreateStructure = next() < structureCountMap[density];
+  
+  if (shouldCreateStructure) {
+    const types = ["hut", "ruin", "garden", "cart", "parkourHouse", "shrine", "well"];
+    const type = types[Math.floor(next() * types.length)];
+    const w = type === "garden" ? 136 : type === "shrine" ? 92 : type === "well" ? 68 : 76 + Math.floor(next() * 58);
+    const h = type === "garden" ? 106 : type === "shrine" ? 88 : type === "well" ? 84 : 64 + Math.floor(next() * 54);
+    
     structures.push({
       id: `structure-${chunkX}-${chunkY}`,
       type,
@@ -223,11 +279,15 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
       w: type === "parkourHouse" ? Math.max(128, w) : w,
       h: type === "parkourHouse" ? Math.max(96, h) : h,
       color: next() > 0.45 ? "#b98d55" : "#789e6b",
+      detail: next() > 0.6 ? "ornate" : "plain",
     });
   }
 
+  // Density-based pickups
   const currencies = ["flies", "pearls", "amber"];
-  const pickupCount = 3 + Math.floor(next() * 4);
+  const pickupCountMap = { sparse: 2.5, normal: 3.5, dense: 5.2 };
+  const pickupCount = Math.floor(pickupCountMap[density] + next() * 2);
+  
   for (let i = 0; i < pickupCount; i += 1) {
     const currency = currencies[Math.floor(next() * currencies.length)];
     pickups.push({
@@ -239,6 +299,22 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     });
   }
 
+  // Add foliage for visual richness
+  const foliageCountMap = { sparse: 4, normal: 8, dense: 16 };
+  const foliageCount = foliageCountMap[density] + Math.floor(next() * 6);
+  const foliageTypes = ["bush", "wildflower", "grass_clump", "tall_grass"];
+  
+  for (let i = 0; i < foliageCount; i += 1) {
+    foliage.push({
+      id: `foliage-${chunkX}-${chunkY}-${i}`,
+      type: foliageTypes[Math.floor(next() * foliageTypes.length)],
+      x: baseX + 50 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 100)),
+      y: baseY + 50 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 100)),
+      scale: 0.6 + next() * 0.8,
+      tint: next() > 0.5 ? "dark" : "light",
+    });
+  }
+
   return {
     key: `${chunkX}:${chunkY}`,
     walls,
@@ -246,6 +322,8 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     lilyPads,
     structures,
     pickups,
+    foliage,
+    density,
   };
 }
 
@@ -319,6 +397,19 @@ function generateUrbanChunk(chunkX, chunkY, next) {
   ];
   const cars = makeChunkTraffic(roads, chunkX, chunkY);
 
+  // Urban foliage in parks
+  const foliage = [];
+  for (let i = 0; i < 6; i += 1) {
+    foliage.push({
+      id: `urban-foliage-${chunkX}-${chunkY}-${i}`,
+      type: next() > 0.5 ? "tree_urban" : "shrub_urban",
+      x: park.x + 30 + Math.floor(next() * (park.w - 60)),
+      y: park.y - 80 + Math.floor(next() * 100),
+      scale: 0.7 + next() * 0.6,
+      tint: "dark",
+    });
+  }
+
   return {
     key: `${chunkX}:${chunkY}`,
     urban: true,
@@ -330,6 +421,7 @@ function generateUrbanChunk(chunkX, chunkY, next) {
     roads,
     parks: [park],
     cars,
+    foliage,
   };
 }
 

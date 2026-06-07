@@ -309,6 +309,7 @@ function getActiveTopDown(state) {
       active.roads.push(...(chunk.roads ?? []));
       active.parks.push(...(chunk.parks ?? []));
       active.cars.push(...(chunk.cars ?? []));
+      active.foliage.push(...(chunk.foliage ?? []));
     }
   }
 
@@ -339,6 +340,7 @@ function emptyActive() {
     roads: [],
     parks: [],
     cars: [],
+    foliage: [],
   };
 }
 
@@ -733,6 +735,7 @@ export function drawTopDownGame(ctx, state) {
   drawLilyPads(ctx, state);
   drawWalls(ctx, state);
   drawStructures(ctx, state);
+  drawFoliage(ctx, state);
   drawVehicles(ctx, state);
   drawCheckpoints(ctx, state);
   drawTopDownPickups(ctx, state);
@@ -1111,6 +1114,92 @@ function drawCityBuilding(ctx, item) {
   for (let x = -item.w / 2 + 18; x < item.w / 2 - 14; x += 28) {
     for (let y = -item.h / 2 + 18; y < item.h / 2 - 12; y += 26) {
       ctx.fillRect(x, y, 12, 10);
+    }
+  }
+}
+
+function drawFoliage(ctx, state) {
+  for (const item of state.active.foliage) {
+    const baseColor = item.tint === "dark" ? "#3d6b22" : "#5ba35f";
+    const scale = item.scale || 1;
+
+    if (item.type === "bush") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 24 * scale, 18 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+      ctx.beginPath();
+      ctx.ellipse(8, 6, 14 * scale, 8 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else if (item.type === "wildflower") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(-2 * scale, -12 * scale, 4 * scale, 12 * scale);
+      ctx.fillStyle = "#ff8fa0";
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const x = Math.cos(angle) * 8 * scale;
+        const y = -12 * scale + Math.sin(angle) * 6 * scale;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (item.type === "grass_clump") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.fillStyle = baseColor;
+      for (let i = 0; i < 4; i++) {
+        const offset = i * 6 * scale;
+        ctx.beginPath();
+        ctx.moveTo(-8 * scale + offset, 0);
+        ctx.quadraticCurveTo(-6 * scale + offset, -16 * scale, -4 * scale + offset, -20 * scale);
+        ctx.lineWidth = 2 * scale;
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (item.type === "tall_grass") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 3 * scale;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-6 * scale, -12 * scale, -4 * scale, -28 * scale);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(2 * scale, 2 * scale);
+      ctx.quadraticCurveTo(8 * scale, -10 * scale, 6 * scale, -26 * scale);
+      ctx.stroke();
+      ctx.restore();
+    } else if (item.type === "tree_urban") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      // Trunk
+      ctx.fillStyle = "#5a4a3a";
+      ctx.fillRect(-6 * scale, -8 * scale, 12 * scale, 16 * scale);
+      // Canopy
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.ellipse(0, -16 * scale, 20 * scale, 18 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else if (item.type === "shrub_urban") {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 16 * scale, 14 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 }

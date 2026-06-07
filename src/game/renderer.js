@@ -110,14 +110,41 @@ function drawWater(ctx, waterZones, time, cameraX) {
     if (!isRectVisible(cameraX, zone.x, zone.w)) {
       continue;
     }
-    ctx.fillStyle = "#2fb6c8";
+
+    // Water base with gradient
+    const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.h);
+    gradient.addColorStop(0, "#3dc8d8");
+    gradient.addColorStop(1, "#1f8a99");
+    ctx.fillStyle = gradient;
     ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
-    ctx.strokeStyle = "rgba(255,255,255,0.38)";
+
+    // Water texture/ripples
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    for (let i = 0; i < 3; i++) {
+      const waveOffset = (time * 0.5 + i * 0.3) % zone.w;
+      ctx.fillRect(zone.x + waveOffset, zone.y + i * 20, 80, 4);
+    }
+
+    // Wave animation
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     ctx.lineWidth = 2;
-    for (let y = zone.y + 20; y < zone.y + zone.h; y += 40) {
+    for (let y = zone.y + 16; y < zone.y + zone.h; y += 42) {
       ctx.beginPath();
-      for (let x = zone.x; x <= zone.x + zone.w; x += 70) {
-        const waveY = y + Math.sin(time * 2 + x * 0.02) * 3;
+      for (let x = zone.x; x <= zone.x + zone.w; x += 50) {
+        const waveY = y + Math.sin(time * 2.2 + x * 0.025) * 4 + Math.cos(time * 1.5 + x * 0.015) * 2;
+        if (x === zone.x) ctx.moveTo(x, waveY);
+        else ctx.lineTo(x, waveY);
+      }
+      ctx.stroke();
+    }
+
+    // Additional subtle wave layer
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.lineWidth = 1;
+    for (let y = zone.y + 30; y < zone.y + zone.h; y += 35) {
+      ctx.beginPath();
+      for (let x = zone.x; x <= zone.x + zone.w; x += 35) {
+        const waveY = y + Math.sin(time * 1.8 - x * 0.02) * 3;
         if (x === zone.x) ctx.moveTo(x, waveY);
         else ctx.lineTo(x, waveY);
       }
@@ -160,6 +187,14 @@ function drawDecorations(ctx, decorations, cameraX) {
       continue;
     }
     if (item.type === "crystal") {
+      // Shadow
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+      ctx.beginPath();
+      ctx.ellipse(item.x, item.y + 2, 16, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       ctx.fillStyle = item.color ?? "#a7f3ff";
       ctx.beginPath();
       ctx.moveTo(item.x, item.y - 44);
@@ -168,29 +203,140 @@ function drawDecorations(ctx, decorations, cameraX) {
       ctx.lineTo(item.x - 16, item.y - 10);
       ctx.closePath();
       ctx.fill();
+
+      // Shine
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.beginPath();
+      ctx.moveTo(item.x - 2, item.y - 20);
+      ctx.lineTo(item.x + 4, item.y - 12);
+      ctx.lineTo(item.x + 2, item.y - 16);
+      ctx.closePath();
+      ctx.fill();
       continue;
     }
     if (item.type === "mushroom") {
+      // Stem
       ctx.fillStyle = "#f8f0d8";
       ctx.fillRect(item.x - 7, item.y - 30, 14, 30);
+
+      // Cap with shading
       ctx.fillStyle = item.color ?? "#ff7e67";
       ctx.beginPath();
       ctx.ellipse(item.x, item.y - 32, 28, 14, 0, Math.PI, Math.PI * 2);
       ctx.fill();
+
+      // Cap highlight
+      ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.beginPath();
+      ctx.ellipse(item.x - 8, item.y - 36, 14, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
       continue;
     }
     if (item.type === "vine") {
-      ctx.strokeStyle = "#315f3d";
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#2d5838";
+      ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.moveTo(item.x, item.y - 80);
       ctx.bezierCurveTo(item.x - 24, item.y - 45, item.x + 20, item.y - 30, item.x - 8, item.y);
       ctx.stroke();
+
+      // Vine highlight
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(item.x + 2, item.y - 80);
+      ctx.bezierCurveTo(item.x - 20, item.y - 45, item.x + 24, item.y - 30, item.x - 4, item.y);
+      ctx.stroke();
       continue;
     }
+    
+    // Reeds with detail
     ctx.fillStyle = "#568849";
     ctx.fillRect(item.x, item.y - 34, 6, 34);
     ctx.fillRect(item.x + 16, item.y - 26, 6, 26);
+    
+    // Reed tips
+    ctx.fillStyle = "#6db354";
+    ctx.beginPath();
+    ctx.moveTo(item.x + 3, item.y - 34);
+    ctx.lineTo(item.x + 1, item.y - 40);
+    ctx.lineTo(item.x + 5, item.y - 38);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawFoliage(ctx, foliageList, cameraX) {
+  if (!foliageList || foliageList.length === 0) return;
+  
+  for (const item of foliageList) {
+    if (!isPointVisible(cameraX, item.x, 80)) {
+      continue;
+    }
+
+    const baseColor = item.tint === "dark" ? "#4a7d2a" : "#6ba349";
+    const scale = item.scale || 1;
+
+    if (item.type === "bush") {
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.ellipse(item.x, item.y, 24 * scale, 18 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+      ctx.beginPath();
+      ctx.ellipse(item.x + 8, item.y + 6, 14 * scale, 8 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (item.type === "wildflower") {
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(item.x - 2 * scale, item.y - 12 * scale, 4 * scale, 12 * scale);
+      ctx.fillStyle = "#ff8fa0";
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const x = item.x + Math.cos(angle) * 8 * scale;
+        const y = item.y - 12 * scale + Math.sin(angle) * 6 * scale;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (item.type === "grass_clump") {
+      ctx.fillStyle = baseColor;
+      for (let i = 0; i < 4; i++) {
+        const offset = i * 6 * scale;
+        ctx.beginPath();
+        ctx.moveTo(item.x - 8 * scale + offset, item.y);
+        ctx.quadraticCurveTo(item.x - 6 * scale + offset, item.y - 16 * scale, item.x - 4 * scale + offset, item.y - 20 * scale);
+        ctx.lineWidth = 2 * scale;
+        ctx.stroke();
+      }
+    } else if (item.type === "tall_grass") {
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 3 * scale;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(item.x, item.y);
+      ctx.quadraticCurveTo(item.x - 6 * scale, item.y - 12 * scale, item.x - 4 * scale, item.y - 28 * scale);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(item.x + 2 * scale, item.y + 2 * scale);
+      ctx.quadraticCurveTo(item.x + 8 * scale, item.y - 10 * scale, item.x + 6 * scale, item.y - 26 * scale);
+      ctx.stroke();
+    } else if (item.type === "tree_urban") {
+      // Trunk
+      ctx.fillStyle = "#5a4a3a";
+      ctx.fillRect(item.x - 6 * scale, item.y - 8 * scale, 12 * scale, 16 * scale);
+      // Canopy
+      ctx.fillStyle = "#4a7d2a";
+      ctx.beginPath();
+      ctx.ellipse(item.x, item.y - 16 * scale, 20 * scale, 18 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (item.type === "shrub_urban") {
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.ellipse(item.x, item.y, 16 * scale, 14 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
@@ -199,62 +345,162 @@ function drawGeneratedStructures(ctx, structures, cameraX) {
     if (!isRectVisible(cameraX, item.x, item.w, 110)) {
       continue;
     }
+
+    // Shadow for depth
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+    ctx.beginPath();
+    ctx.ellipse(item.x + item.w / 2, item.y + item.h + 6, item.w / 2 + 8, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     if (item.type === "watchtower") {
-      ctx.fillStyle = "#7a5938";
-      ctx.fillRect(item.x + 18, item.y + 18, 14, 86);
-      ctx.fillRect(item.x + 76, item.y + 18, 14, 86);
-      ctx.fillStyle = "#caa46c";
-      roundRect(ctx, item.x, item.y, 112, 28, 6);
+      // Base stone
+      ctx.fillStyle = "#6d5233";
+      ctx.fillRect(item.x, item.y, item.w, 28);
+      ctx.fillStyle = "#a9885f";
+      roundRect(ctx, item.x + 4, item.y + 2, item.w - 8, 24, 6);
       ctx.fill();
+
+      // Wood pillars with texture
+      const woodColor = item.detail === "weathered" ? "#654a2f" : "#7a5938";
+      ctx.fillStyle = woodColor;
+      ctx.fillRect(item.x + 16, item.y + 18, 16, 88);
+      ctx.fillRect(item.x + 80, item.y + 18, 16, 88);
+      
+      // Wood grain texture
+      if (item.detail !== "plain") {
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath();
+          ctx.moveTo(item.x + 16, item.y + 20 + i * 12);
+          ctx.lineTo(item.x + 32, item.y + 20 + i * 12);
+          ctx.stroke();
+        }
+      }
+
+      // Roof
       ctx.fillStyle = "#df6756";
       ctx.beginPath();
       ctx.moveTo(item.x - 8, item.y + 2);
-      ctx.lineTo(item.x + 56, item.y - 34);
-      ctx.lineTo(item.x + 120, item.y + 2);
+      ctx.lineTo(item.x + item.w / 2, item.y - 34);
+      ctx.lineTo(item.x + item.w + 8, item.y + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Roof shading
+      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+      ctx.beginPath();
+      ctx.moveTo(item.x + item.w / 2, item.y - 34);
+      ctx.lineTo(item.x + item.w + 8, item.y + 2);
+      ctx.lineTo(item.x + item.w / 2, item.y - 10);
       ctx.closePath();
       ctx.fill();
       continue;
     }
+
     if (item.type === "brokenArch") {
-      ctx.strokeStyle = "#7f887d";
-      ctx.lineWidth = 18;
+      const rotation = item.rotation || 0;
+      ctx.save();
+      ctx.translate(item.x + item.w / 2, item.y);
+      ctx.rotate(rotation * Math.PI / 180);
+      ctx.translate(-item.w / 2, 0);
+
+      // Stone supports
+      ctx.fillStyle = "#5a6b66";
+      ctx.fillRect(8, -4, 28, 82);
+      ctx.fillRect(item.w - 36, -4, 28, 82);
+
+      // Arch
+      ctx.strokeStyle = "#6f7b75";
+      ctx.lineWidth = 20;
       ctx.beginPath();
-      ctx.arc(item.x + 74, item.y, 58, Math.PI, Math.PI * 2);
+      ctx.arc(item.w / 2, 0, 58, Math.PI, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = "#68746d";
-      ctx.fillRect(item.x + 8, item.y - 4, 28, 82);
-      ctx.fillRect(item.x + 118, item.y - 4, 28, 82);
+
+      // Inner detail
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(item.w / 2, 0, 48, Math.PI, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
       continue;
     }
+
     if (item.type === "marketStall") {
-      ctx.fillStyle = "#8f5a2e";
+      // Wooden supports
+      ctx.fillStyle = "#6b4423";
       ctx.fillRect(item.x + 12, item.y - 56, 12, 56);
-      ctx.fillRect(item.x + 84, item.y - 56, 12, 56);
+      ctx.fillRect(item.x + item.w - 24, item.y - 56, 12, 56);
+
+      // Canvas top
       ctx.fillStyle = "#fff1a8";
-      roundRect(ctx, item.x + 5, item.y - 36, 102, 28, 6);
+      roundRect(ctx, item.x + 5, item.y - 36, item.w - 10, 28, 6);
       ctx.fill();
+
+      // Canvas shading
+      ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+      roundRect(ctx, item.x + 5, item.y - 36, item.w - 10, 14, 6);
+      ctx.fill();
+
+      // Hanging goods
       ctx.fillStyle = "#df6756";
       ctx.fillRect(item.x + 10, item.y - 36, 20, 28);
-      ctx.fillRect(item.x + 54, item.y - 36, 20, 28);
+      ctx.fillRect(item.x + item.w / 2 - 10, item.y - 36, 20, 28);
+      ctx.fillRect(item.x + item.w - 30, item.y - 36, 20, 28);
+
+      // Goods detail
+      ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.fillRect(item.x + 12, item.y - 32, 16, 8);
       continue;
     }
+
     if (item.type === "stoneNest") {
-      ctx.fillStyle = "#7f887d";
+      // Nest body
+      ctx.fillStyle = "#6f7b75";
       ctx.beginPath();
-      ctx.ellipse(item.x + 54, item.y - 16, 54, 24, 0, 0, Math.PI * 2);
+      ctx.ellipse(item.x + item.w / 2, item.y - 16, item.w / 2, 24, 0, 0, Math.PI * 2);
       ctx.fill();
+
+      // Nest shading
+      ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+      ctx.beginPath();
+      ctx.ellipse(item.x + item.w / 2 + 10, item.y - 12, item.w / 3, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eggs/gems
       ctx.fillStyle = "#a7f3ff";
       ctx.beginPath();
-      ctx.arc(item.x + 44, item.y - 27, 10, 0, Math.PI * 2);
-      ctx.arc(item.x + 62, item.y - 28, 9, 0, Math.PI * 2);
+      ctx.arc(item.x + item.w / 2 - 16, item.y - 27, 10, 0, Math.PI * 2);
+      ctx.arc(item.x + item.w / 2 + 4, item.y - 28, 9, 0, Math.PI * 2);
+      ctx.arc(item.x + item.w / 2 + 18, item.y - 25, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Egg shine
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.beginPath();
+      ctx.arc(item.x + item.w / 2 - 16, item.y - 31, 3, 0, Math.PI * 2);
+      ctx.arc(item.x + item.w / 2 + 4, item.y - 32, 3, 0, Math.PI * 2);
       ctx.fill();
       continue;
     }
-    ctx.fillStyle = "#66452d";
-    ctx.fillRect(item.x + 48, item.y - 72, 10, 72);
-    ctx.fillStyle = "#ffe27a";
-    roundRect(ctx, item.x + 12, item.y - 72, 76, 34, 6);
+
+    // Road sign or similar
+    ctx.fillStyle = item.color || "#8b7355";
+    ctx.fillRect(item.x + item.w / 2 - 5, item.y - 72, 10, 72);
+    ctx.fillStyle = item.color || "#ffe27a";
+    roundRect(ctx, item.x + 12, item.y - 72, item.w - 24, 34, 6);
     ctx.fill();
+
+    // Sign detail
+    if (item.detail === "ornate") {
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(item.x + 18, item.y - 66, item.w - 36, 22);
+    }
   }
 }
 
