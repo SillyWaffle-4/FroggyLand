@@ -3,8 +3,9 @@ import { meadow } from "./maps/meadow.js";
 import { mushroomCave } from "./maps/mushroomCave.js";
 import { canopyRuins } from "./maps/canopyRuins.js";
 import { deepCave } from "./maps/deepCave.js";
+import { sunkenGrotto } from "./maps/sunkenGrotto.js";
 
-const CHUNKS = [meadow, mushroomCave, canopyRuins, deepCave];
+const CHUNKS = [meadow, mushroomCave, canopyRuins, deepCave, sunkenGrotto];
 const BUCKET_SIZE = 520;
 
 function flatten(key) {
@@ -35,9 +36,9 @@ function buildBuckets(items) {
 
 export const WORLD = {
   name: "Froggy Wilds",
-  worldWidth: 9900,
+  worldWidth: 12650,
   spawn: { x: 86, y: 498 },
-  goal: { x: 9825, y: 332 },
+  goal: { x: 12570, y: 345 },
   regions: CHUNKS.map(({ name, startX, endX }) => ({ name, startX, endX })),
   platforms: flatten("platforms"),
   waterZones: flatten("waterZones"),

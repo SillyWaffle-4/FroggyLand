@@ -36,7 +36,7 @@ export const deepCave = {
       y: 382,
       cost: 2,
       pads: 1,
-      talk: "The moonroot shrine is ahead. The last pond has a secret if you place a pad left.",
+      talk: "The old shrine path keeps going. The grotto ahead has a basin that needs a bought pad.",
     },
   ],
   flySpawnPoints: [
@@ -58,7 +58,7 @@ export const deepCave = {
     { x: 7390, y: 395, w: 280, text: "Moonroot Cavern" },
     { x: 8355, y: 260, w: 280, text: "Optional relic above the route" },
     { x: 9460, y: 465, w: 310, text: "Water path saves time if you place well" },
-    { x: 9795, y: 380, w: 240, text: "Moonroot shrine" },
+    { x: 9795, y: 380, w: 260, text: "Sunken grotto ahead" },
   ],
   checkpoints: [
     { id: "moonroot-lamp", x: 8010, y: 388, spawnX: 8010, spawnY: 388 - FROG_HEIGHT },
