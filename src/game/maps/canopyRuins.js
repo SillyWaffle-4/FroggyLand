@@ -33,7 +33,7 @@ export const canopyRuins = {
       y: 300,
       cost: TRADE_COST,
       pads: TRADE_PADS,
-      talk: "The route splits: climb above the broken arches or build across the water.",
+      talk: "The route splits: climb above the broken arches or place pads across the water.",
     },
     {
       id: "dock-sage",

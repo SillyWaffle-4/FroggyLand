@@ -81,7 +81,6 @@ function ModeMenu({ onSelect }) {
         <div className="menu-frog">
           <span />
         </div>
-        <div className="menu-house" />
       </div>
       <div className="menu-copy">
         <div className="menu-kicker">

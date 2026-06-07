@@ -5,7 +5,6 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from "./constants.js";
-import { getBuildItem } from "./building.js";
 import { WORLD } from "./world.js";
 import { clamp, isPointVisible, isRectVisible, roundRect } from "./utils.js";
 
@@ -22,10 +21,8 @@ export function drawGame(ctx, state) {
   drawPlatforms(ctx, state.active.platforms, cameraX);
   drawDecorations(ctx, state.active.decorations, cameraX);
   drawGeneratedStructures(ctx, state.active.structures, cameraX);
-  drawPlacedBuilds(ctx, state.placedBuilds, cameraX);
   drawLilypads(ctx, state, state.time, cameraX);
   drawPlacementPreview(ctx, state);
-  drawBuildPreview(ctx, state);
   drawMessages(ctx, state, state.active.messages, cameraX);
   drawCurrencyPickups(ctx, state, cameraX);
   drawRelics(ctx, state, state.active.relics, cameraX);
@@ -259,88 +256,6 @@ function drawGeneratedStructures(ctx, structures, cameraX) {
     roundRect(ctx, item.x + 12, item.y - 72, 76, 34, 6);
     ctx.fill();
   }
-}
-
-function drawPlacedBuilds(ctx, placedBuilds, cameraX) {
-  for (const placed of placedBuilds) {
-    const item = getBuildItem(placed.itemId);
-    if (!item || !isRectVisible(cameraX, placed.x, placed.w, 90)) {
-      continue;
-    }
-    drawBuildPiece(ctx, item, placed.x, placed.y, placed.w, placed.h, 1);
-  }
-}
-
-function drawBuildPreview(ctx, state) {
-  const item = getBuildItem(state.buildMode);
-  if (!item || (state.buildInventory[item.id] ?? 0) <= 0) {
-    return;
-  }
-  const pointer = state.pointer;
-  ctx.save();
-  ctx.globalAlpha = 0.55;
-  drawBuildPiece(ctx, item, pointer.x - item.w / 2, pointer.y - item.h / 2, item.w, item.h, 0.8);
-  ctx.restore();
-}
-
-function drawBuildPiece(ctx, item, x, y, w, h, alpha = 1) {
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  if (item.kind === "roof") {
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    ctx.moveTo(x - 8, y + h);
-    ctx.lineTo(x + w / 2, y);
-    ctx.lineTo(x + w + 8, y + h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-  } else if (item.kind === "window") {
-    ctx.fillStyle = item.color;
-    roundRect(ctx, x, y, w, h, 8);
-    ctx.fill();
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x + w / 2, y + 4);
-    ctx.lineTo(x + w / 2, y + h - 4);
-    ctx.moveTo(x + 4, y + h / 2);
-    ctx.lineTo(x + w - 4, y + h / 2);
-    ctx.stroke();
-  } else if (item.kind === "plant") {
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 5;
-    for (let i = 0; i < 5; i += 1) {
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, y + h);
-      ctx.quadraticCurveTo(x + 8 + i * 10, y + h * 0.45, x + 4 + i * 11, y + 8);
-      ctx.stroke();
-    }
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h - 5, w / 2, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (item.kind === "decor") {
-    ctx.strokeStyle = item.accent;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(x + w / 2, y);
-    ctx.lineTo(x + w / 2, y + h);
-    ctx.stroke();
-    ctx.fillStyle = item.color;
-    roundRect(ctx, x + 5, y + 16, w - 10, 24, 7);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = item.color;
-    roundRect(ctx, x, y, w, h, 7);
-    ctx.fill();
-    ctx.fillStyle = item.accent;
-    ctx.fillRect(x + w / 2 - 8, y + h - 24, 16, 24);
-  }
-  ctx.restore();
 }
 
 function drawLilypads(ctx, state, time, cameraX) {

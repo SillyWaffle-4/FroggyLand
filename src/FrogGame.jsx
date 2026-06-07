@@ -1,16 +1,11 @@
 import React from "react";
 import { MAX_DT, TARGET_FRAME_MS, VIEW_HEIGHT, VIEW_WIDTH, keys } from "./game/constants.js";
-import { BUILD_CATALOG, buildCurrencyLabel } from "./game/building.js";
 import { WORLD } from "./game/world.js";
 import { drawGame } from "./game/renderer.js";
 import {
-  buyBuildItem,
-  cancelBuildMode,
   createInitialState,
   findNearbyNpc,
-  placeBuildItem,
   placeLilyPad,
-  selectBuildItem,
   startTongue,
   togglePlacementMode,
   tradeWithNearbyNpc,
@@ -44,7 +39,6 @@ export function FrogGame({ soundOn }) {
       }
       if (event.code === "Escape") {
         stateRef.current.placementMode = false;
-        cancelBuildMode(stateRef.current);
         return;
       }
       if ([...keys.left, ...keys.right, ...keys.jump].includes(event.code)) {
@@ -139,10 +133,6 @@ export function FrogGame({ soundOn }) {
       placeLilyPad(stateRef.current, nextPointer, soundOnRef.current);
       return;
     }
-    if (stateRef.current.buildMode) {
-      placeBuildItem(stateRef.current, nextPointer, soundOnRef.current);
-      return;
-    }
     startTongue(stateRef.current, nextPointer);
   };
 
@@ -171,7 +161,7 @@ export function FrogGame({ soundOn }) {
           <span>Area</span>
           <strong>{hud.regionName}</strong>
         </div>
-        <div className="stat-grid">
+        <div className="inventory-grid" aria-label="Inventory">
           <div>
             <span>Flies</span>
             <strong>{hud.score}</strong>
@@ -191,26 +181,6 @@ export function FrogGame({ soundOn }) {
           <div>
             <span>Relics</span>
             <strong>{hud.relics}/{hud.totalRelics}</strong>
-          </div>
-          <div>
-            <span>Nearby</span>
-            <strong>{hud.flyCount}</strong>
-          </div>
-          <div>
-            <span>Shrine</span>
-            <strong>{hud.reachedGoal ? "Found" : "Open"}</strong>
-          </div>
-          <div>
-            <span>Check</span>
-            <strong>{hud.checkpointName}</strong>
-          </div>
-          <div>
-            <span>Mode</span>
-            <strong>{hud.placementMode ? "Place" : "Tongue"}</strong>
-          </div>
-          <div>
-            <span>Cooldown</span>
-            <strong>{hud.tongueCooldown}</strong>
           </div>
           <div>
             <span>Range</span>
@@ -239,54 +209,11 @@ export function FrogGame({ soundOn }) {
             )}
           </div>
         )}
-        <div className="build-shop" aria-label="Build shop">
-          <div className="shop-title">
-            <span>Home</span>
-            <strong>{hud.placedBuilds} placed</strong>
-          </div>
-          <div className="build-grid">
-            {BUILD_CATALOG.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`build-button ${hud.buildMode === item.id ? "is-active" : ""}`}
-                onClick={() => {
-                  if (hud.buildInventory[item.id] > 0) {
-                    selectBuildItem(stateRef.current, item.id);
-                  } else {
-                    buyBuildItem(stateRef.current, item.id, soundOnRef.current);
-                  }
-                  setHud(makeHud(stateRef.current));
-                }}
-              >
-                <span>{item.name}</span>
-                <strong>
-                  {hud.buildInventory[item.id] > 0
-                    ? `${hud.buildInventory[item.id]} owned`
-                    : `${item.cost} ${buildCurrencyLabel(item.currency)}`}
-                </strong>
-              </button>
-            ))}
-          </div>
-          {hud.buildMode && (
-            <button
-              type="button"
-              className="panel-button"
-              onClick={() => {
-                cancelBuildMode(stateRef.current);
-                setHud(makeHud(stateRef.current));
-              }}
-            >
-              Stop Building
-            </button>
-          )}
-        </div>
         <p className="notice">{hud.nearbyNpcName ? `Near ${hud.nearbyNpcName}. ${hud.notice}` : hud.notice}</p>
         <div className="control-list" aria-label="Controls">
           {!hud.tutorialComplete && <span><kbd>A</kbd><kbd>D</kbd> Move</span>}
           {!hud.tutorialComplete && <span><kbd>W</kbd><kbd>Space</kbd> Jump</span>}
           <span><kbd>Click</kbd> Tongue</span>
-          {hud.buildMode && <span><kbd>Click</kbd> Place {hud.buildName}</span>}
           {hud.canTrade && <span><kbd>E</kbd> Trade</span>}
           {hud.canPlace && <span><kbd>P</kbd> Place</span>}
         </div>
@@ -305,19 +232,11 @@ function makeHud(state) {
     amber: state.amber,
     relics: state.collectedRelics.size,
     totalRelics: WORLD.relics.length,
-    flyCount: state.flies.length,
-    reachedGoal: state.reachedGoal,
-    checkpointName: state.activeCheckpoint ? "On" : "Off",
     placementMode: state.placementMode,
-    buildMode: state.buildMode,
-    buildName: BUILD_CATALOG.find((item) => item.id === state.buildMode)?.name ?? "Build",
-    buildInventory: state.buildInventory,
-    placedBuilds: state.placedBuilds.length,
     nearbyNpcName: nearbyNpc?.name ?? null,
     canTrade: Boolean(nearbyNpc),
     canPlace: state.lilyPads > 0 || state.placementMode,
     tutorialComplete: state.tutorialComplete,
-    tongueCooldown: state.tongueCooldown > 0 ? `${Math.ceil(state.tongueCooldown * 10) / 10}s` : "Ready",
     tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
     notice: state.notice,
   };

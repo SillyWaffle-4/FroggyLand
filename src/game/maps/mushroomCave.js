@@ -63,7 +63,7 @@ export const mushroomCave = {
   messages: [
     { x: 2480, y: 430, w: 260, text: "Mushroom Cave" },
     { x: 3060, y: 285, w: 300, text: "Caves are part of the same map", tutorial: true },
-    { x: 3710, y: 306, w: 300, text: "Tongue cooldown rewards timing", tutorial: true },
+    { x: 3710, y: 306, w: 300, text: "Aim carefully through tight cave gaps", tutorial: true },
     { x: 4250, y: 348, w: 300, text: "Lower tunnel hides a relic" },
   ],
   checkpoints: [
