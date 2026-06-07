@@ -1,0 +1,263 @@
+:root {
+  color: #17221c;
+  background: #d7f2ec;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+canvas {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0)),
+    #cfeee6;
+}
+
+.topbar {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4.8rem);
+  line-height: 0.92;
+  color: #173820;
+}
+
+.topbar p {
+  margin: 8px 0 0;
+  color: #436653;
+  font-size: 1rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-button {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(32, 72, 48, 0.2);
+  border-radius: 8px;
+  color: #21452f;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.game-layout {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  align-items: start;
+  gap: 16px;
+}
+
+.canvas-wrap {
+  min-width: 0;
+  display: grid;
+  place-items: start center;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid rgba(27, 61, 45, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+  background: #87d8ff;
+}
+
+canvas:focus-visible {
+  outline: 3px solid #ffcf5a;
+  outline-offset: 3px;
+}
+
+.panel {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(27, 61, 45, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.area-name {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef8ee;
+  border: 1px solid rgba(31, 72, 50, 0.12);
+}
+
+.area-name span {
+  display: block;
+  color: #5c7665;
+  font-size: 0.76rem;
+}
+
+.area-name strong {
+  display: block;
+  margin-top: 2px;
+  color: #193720;
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.stat-grid div {
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: 8px;
+  background: #f7fbf4;
+  border: 1px solid rgba(31, 72, 50, 0.12);
+}
+
+.stat-grid span {
+  display: block;
+  color: #5c7665;
+  font-size: 0.76rem;
+}
+
+.stat-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: #193720;
+  font-size: 1.15rem;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.panel-button {
+  min-height: 36px;
+  border: 1px solid rgba(32, 72, 48, 0.22);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #21452f;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.panel-button:hover {
+  background: #f0f9ea;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff9d9;
+  border: 1px solid rgba(120, 92, 20, 0.18);
+  color: #4f4322;
+  font-size: 0.9rem;
+  line-height: 1.32;
+}
+
+.control-list {
+  display: grid;
+  gap: 9px;
+  color: #324a3b;
+  font-weight: 650;
+}
+
+.control-list span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+kbd {
+  min-width: 28px;
+  height: 25px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(28, 55, 40, 0.22);
+  background: #ffffff;
+  color: #1c3c28;
+  box-shadow: inset 0 -2px 0 rgba(28, 55, 40, 0.12);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 14px;
+  }
+
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    order: -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    align-items: end;
+  }
+
+  .topbar h1 {
+    font-size: 2.2rem;
+  }
+
+  .topbar p {
+    font-size: 0.9rem;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
