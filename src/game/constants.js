@@ -10,6 +10,8 @@ export const JUMP_SPEED = 760;
 export const LILYPAD_JUMP_SPEED = 1120;
 
 export const TONGUE_MAX = 255;
+export const TONGUE_UPGRADE_STEP = 90;
+export const TONGUE_UPGRADE_LIMIT = 1;
 export const TONGUE_SPEED = 2050;
 export const TONGUE_HOLD = 0.1;
 export const TONGUE_COOLDOWN = 0.42;

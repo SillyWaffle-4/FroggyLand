@@ -13,6 +13,8 @@ import {
   TONGUE_COOLDOWN,
   TONGUE_HOLD,
   TONGUE_MAX,
+  TONGUE_UPGRADE_LIMIT,
+  TONGUE_UPGRADE_STEP,
   TONGUE_SPEED,
   VIEW_HEIGHT,
   VIEW_WIDTH,
@@ -43,7 +45,12 @@ export function createInitialState() {
     time: 0,
     cameraX: 0,
     score: 0,
+    pearls: 0,
+    amber: 0,
     lilyPads: 0,
+    tongueRangeBonus: 0,
+    purchasedUpgrades: new Set(),
+    collectedPickups: new Set(),
     collectedRelics: new Set(),
     placedPads: [],
     placementMode: false,
@@ -95,6 +102,8 @@ export function getActiveWorld(cameraX, frogX = cameraX) {
     npcs: getItemsInRange(WORLD.spatial.npcs, minX, maxX),
     flySpawnPoints: getItemsInRange(WORLD.spatial.flySpawnPoints, minX, maxX),
     relics: getItemsInRange(WORLD.spatial.relics, minX, maxX),
+    pearls: getItemsInRange(WORLD.spatial.pearls, minX, maxX),
+    amberCoins: getItemsInRange(WORLD.spatial.amberCoins, minX, maxX),
     messages: getItemsInRange(WORLD.spatial.messages, minX, maxX),
     checkpoints: getItemsInRange(WORLD.spatial.checkpoints, minX, maxX),
     caveZones: getItemsInRange(WORLD.spatial.caveZones, minX, maxX),
@@ -162,6 +171,7 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   updateTongue(state, pointer, dt, soundOn);
   updateParticles(state, dt);
   updateCheckpoint(state, soundOn);
+  updateCurrencyPickups(state, soundOn);
   updateRelics(state, soundOn);
   state.nearbyNpcId = findNearbyNpc(state)?.id ?? null;
 
@@ -174,7 +184,7 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
     } else if (state.tongueCooldown > 0) {
       state.notice = "Tongue cooling down. Time the next snap.";
     } else {
-      state.notice = "Explore the open map, caves, ruins, and hidden relic routes.";
+      state.notice = "Explore the open map, collect currencies, buy upgrades, and find hidden relic routes.";
     }
   }
 
@@ -251,15 +261,31 @@ export function tradeWithNearbyNpc(state, soundOn) {
     return false;
   }
 
-  if (state.score < npc.cost) {
-    setNotice(state, `${npc.name} wants ${npc.cost} flies. You have ${state.score}.`);
+  const currency = npc.currency ?? "flies";
+  const available = getCurrency(state, currency);
+  if (available < npc.cost) {
+    setNotice(state, `${npc.name} wants ${npc.cost} ${currencyLabel(currency)}. You have ${available}.`);
     if (soundOn) beep(180, 0.04);
     return false;
   }
 
-  state.score -= npc.cost;
+  if (npc.reward === "tongueRange") {
+    if (state.purchasedUpgrades.has(npc.id) || state.tongueRangeBonus >= TONGUE_UPGRADE_STEP * TONGUE_UPGRADE_LIMIT) {
+      setNotice(state, `${npc.name} has already upgraded your tongue.`);
+      return false;
+    }
+    spendCurrency(state, currency, npc.cost);
+    state.tongueRangeBonus += npc.rangeBonus ?? TONGUE_UPGRADE_STEP;
+    state.purchasedUpgrades.add(npc.id);
+    setNotice(state, `${npc.name} upgraded tongue range by ${npc.rangeBonus ?? TONGUE_UPGRADE_STEP}.`);
+    addSplash(state, npc.x, npc.y - 42, "#f6b7ff");
+    if (soundOn) beep(980, 0.06);
+    return true;
+  }
+
+  spendCurrency(state, currency, npc.cost);
   state.lilyPads += npc.pads;
-  setNotice(state, `${npc.name} traded ${npc.pads} lily pad for ${npc.cost} flies.`);
+  setNotice(state, `${npc.name} traded ${npc.pads} lily pad for ${npc.cost} ${currencyLabel(currency)}.`);
   addSplash(state, npc.x, npc.y - 42, "#b8f05e");
   if (soundOn) beep(700, 0.05);
   return true;
@@ -388,13 +414,35 @@ function updateRelics(state, soundOn) {
   }
 }
 
+function updateCurrencyPickups(state, soundOn) {
+  const frogRect = { x: state.frog.x, y: state.frog.y, w: FROG_WIDTH, h: FROG_HEIGHT };
+  collectPickups(state, frogRect, state.active.pearls, "pearls", "#f6b7ff", soundOn);
+  collectPickups(state, frogRect, state.active.amberCoins, "amber", "#ffbd5f", soundOn);
+}
+
+function collectPickups(state, frogRect, pickups, currency, color, soundOn) {
+  for (const pickup of pickups) {
+    if (state.collectedPickups.has(pickup.id)) {
+      continue;
+    }
+    const pickupRect = { x: pickup.x - 13, y: pickup.y - 13, w: 26, h: 26 };
+    if (rectsOverlap(frogRect, pickupRect)) {
+      state.collectedPickups.add(pickup.id);
+      addCurrency(state, currency, pickup.value ?? 1);
+      setNotice(state, `Collected ${pickup.value ?? 1} ${currencyLabel(currency)}.`);
+      addSplash(state, pickup.x, pickup.y, color);
+      if (soundOn) beep(currency === "pearls" ? 1120 : 820, 0.045);
+    }
+  }
+}
+
 function updateGoal(state, soundOn) {
   const frogRect = { x: state.frog.x, y: state.frog.y, w: FROG_WIDTH, h: FROG_HEIGHT };
   const goalRect = { x: WORLD.goal.x - 20, y: WORLD.goal.y - 24, w: 120, h: 190 };
   const wasReached = state.reachedGoal;
   state.reachedGoal = rectsOverlap(frogRect, goalRect);
   if (state.reachedGoal && !wasReached) {
-    setNotice(state, "Moonroot shrine found. Keep exploring for relics or restart for a faster run.", 4);
+    setNotice(state, "Windbell shrine found. Keep exploring for relics, pearls, amber, or restart for a faster run.", 4);
     addSplash(state, WORLD.goal.x + 36, WORLD.goal.y + 48, "#ffdf5d");
     if (soundOn) beep(880, 0.05);
   }
@@ -440,7 +488,7 @@ export function startTongue(state, pointer) {
     returning: false,
     hold: 0,
     length: 0,
-    targetLength: Math.min(distance, TONGUE_MAX),
+    targetLength: Math.min(distance, TONGUE_MAX + state.tongueRangeBonus),
     angle: Math.atan2(dy, dx),
     caughtFlyId: null,
     tipX: mouthX,
@@ -544,4 +592,36 @@ function addSplash(state, x, y, color) {
 function setNotice(state, text, duration = 2.8) {
   state.notice = text;
   state.noticeTimer = duration;
+}
+
+function getCurrency(state, currency) {
+  if (currency === "pearls") return state.pearls;
+  if (currency === "amber") return state.amber;
+  return state.score;
+}
+
+function spendCurrency(state, currency, amount) {
+  if (currency === "pearls") {
+    state.pearls -= amount;
+  } else if (currency === "amber") {
+    state.amber -= amount;
+  } else {
+    state.score -= amount;
+  }
+}
+
+function addCurrency(state, currency, amount) {
+  if (currency === "pearls") {
+    state.pearls += amount;
+  } else if (currency === "amber") {
+    state.amber += amount;
+  } else {
+    state.score += amount;
+  }
+}
+
+function currencyLabel(currency) {
+  if (currency === "pearls") return "moon pearls";
+  if (currency === "amber") return "amber coins";
+  return "flies";
 }

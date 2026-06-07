@@ -23,6 +23,7 @@ export function drawGame(ctx, state) {
   drawLilypads(ctx, state, state.time, cameraX);
   drawPlacementPreview(ctx, state);
   drawMessages(ctx, state.active.messages, cameraX);
+  drawCurrencyPickups(ctx, state, cameraX);
   drawRelics(ctx, state, state.active.relics, cameraX);
   drawNpcs(ctx, state, state.active.npcs, cameraX);
   drawFlies(ctx, state.flies, state.time, cameraX);
@@ -277,6 +278,55 @@ function drawRelics(ctx, state, relics, cameraX) {
   }
 }
 
+function drawCurrencyPickups(ctx, state, cameraX) {
+  drawPickupSet(ctx, state, state.active.pearls, cameraX, {
+    currency: "pearls",
+    fill: "#f6b7ff",
+    stroke: "#ffffff",
+    glow: "rgba(246, 183, 255, 0.34)",
+  });
+  drawPickupSet(ctx, state, state.active.amberCoins, cameraX, {
+    currency: "amber",
+    fill: "#ffbd5f",
+    stroke: "#fff2c0",
+    glow: "rgba(255, 189, 95, 0.3)",
+  });
+}
+
+function drawPickupSet(ctx, state, pickups, cameraX, style) {
+  for (const pickup of pickups) {
+    if (state.collectedPickups.has(pickup.id) || !isPointVisible(cameraX, pickup.x, 90)) {
+      continue;
+    }
+
+    const pulse = 1 + Math.sin(state.time * 4.2 + pickup.x * 0.01) * 0.12;
+    ctx.save();
+    ctx.translate(pickup.x, pickup.y);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = style.glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = style.fill;
+    ctx.strokeStyle = style.stroke;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (style.currency === "pearls") {
+      ctx.arc(0, 0, 10 * pulse, 0, Math.PI * 2);
+    } else {
+      ctx.moveTo(0, -12 * pulse);
+      ctx.lineTo(11 * pulse, -2 * pulse);
+      ctx.lineTo(7 * pulse, 12 * pulse);
+      ctx.lineTo(-8 * pulse, 12 * pulse);
+      ctx.lineTo(-11 * pulse, -2 * pulse);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawNpcs(ctx, state, npcs, cameraX) {
   for (const npc of npcs) {
     if (!isPointVisible(cameraX, npc.x, 140)) {
@@ -323,11 +373,19 @@ function drawNpcs(ctx, state, npcs, cameraX) {
       ctx.fill();
       ctx.fillStyle = "#1b3824";
       ctx.font = "650 13px Inter, system-ui, sans-serif";
-      ctx.fillText(`E: ${npc.cost} flies -> ${npc.pads} pad`, 0, -105);
+      ctx.fillText(`E: ${merchantLabel(npc)}`, 0, -105);
     }
 
     ctx.restore();
   }
+}
+
+function merchantLabel(npc) {
+  const currency = npc.currency === "pearls" ? "pearls" : npc.currency === "amber" ? "amber" : "flies";
+  if (npc.reward === "tongueRange") {
+    return `${npc.cost} ${currency} -> tongue +${npc.rangeBonus ?? 90}`;
+  }
+  return `${npc.cost} ${currency} -> ${npc.pads} pad${npc.pads === 1 ? "" : "s"}`;
 }
 
 function drawFlies(ctx, flies, time, cameraX) {

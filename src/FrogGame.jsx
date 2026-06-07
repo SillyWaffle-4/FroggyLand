@@ -171,6 +171,14 @@ export function FrogGame({ soundOn }) {
             <strong>{hud.lilyPads}</strong>
           </div>
           <div>
+            <span>Pearls</span>
+            <strong>{hud.pearls}</strong>
+          </div>
+          <div>
+            <span>Amber</span>
+            <strong>{hud.amber}</strong>
+          </div>
+          <div>
             <span>Relics</span>
             <strong>{hud.relics}/{hud.totalRelics}</strong>
           </div>
@@ -193,6 +201,10 @@ export function FrogGame({ soundOn }) {
           <div>
             <span>Cooldown</span>
             <strong>{hud.tongueCooldown}</strong>
+          </div>
+          <div>
+            <span>Range</span>
+            <strong>{hud.tongueRange}</strong>
           </div>
         </div>
         <div className="action-grid">
@@ -230,6 +242,8 @@ function makeHud(state) {
     regionName: state.regionName,
     score: state.score,
     lilyPads: state.lilyPads,
+    pearls: state.pearls,
+    amber: state.amber,
     relics: state.collectedRelics.size,
     totalRelics: WORLD.relics.length,
     flyCount: state.flies.length,
@@ -238,6 +252,7 @@ function makeHud(state) {
     placementMode: state.placementMode,
     nearbyNpcName: nearbyNpc?.name ?? null,
     tongueCooldown: state.tongueCooldown > 0 ? `${Math.ceil(state.tongueCooldown * 10) / 10}s` : "Ready",
+    tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
     notice: state.notice,
   };
 }

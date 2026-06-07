@@ -53,7 +53,7 @@ export const sunkenGrotto = {
     { x: 10415, y: 414, w: 320, text: "Trade before the basin" },
     { x: 10990, y: 465, w: 380, text: "This ledge needs a bought lily pad boost" },
     { x: 11495, y: 252, w: 290, text: "High exit ledge" },
-    { x: 12495, y: 462, w: 270, text: "End of the current map" },
+    { x: 12495, y: 462, w: 270, text: "Opal marsh ahead" },
   ],
   checkpoints: [
     { id: "grotto-basin", x: 10390, y: 458, spawnX: 10390, spawnY: 458 - FROG_HEIGHT },
