@@ -49,6 +49,13 @@ function clampToWorld(value, size) {
   return Math.max(48, Math.min(TOP_DOWN_WORLD_SIZE - size - 48, value));
 }
 
+function chooseWallMaterial(next) {
+  const roll = next();
+  if (roll > 0.88) return "crystal";
+  if (roll > 0.58) return "stone";
+  return "clay";
+}
+
 export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   const chunkRect = {
     x: chunkX * TOP_DOWN_CHUNK_SIZE,
@@ -85,11 +92,13 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     const wall = {
       id: `wall-${chunkX}-${chunkY}-${i}`,
       type: "wall",
+      material: chooseWallMaterial(next),
       x: clampToWorld(baseX + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - w - 200)), w),
       y: clampToWorld(baseY + 120 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 200)), h),
       w,
       h,
       color: next() > 0.45 ? "#6f7b75" : "#8b8172",
+      mineable: true,
     };
     walls.push(wall);
 

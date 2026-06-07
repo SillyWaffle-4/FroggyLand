@@ -10,6 +10,22 @@ const LEAP_DURATION = 0.72;
 const LEAP_SPEED_MULTIPLIER = 1.45;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
+const MINE_RANGE = 96;
+
+export const PICKAXES = [
+  { tier: 0, id: "none", name: "None", material: "bare hands", costPearls: 0, maxWallTier: 0, hits: Infinity },
+  { tier: 1, id: "reed", name: "Reed Pickaxe", material: "reed", costPearls: 35, maxWallTier: 1, hits: 5 },
+  { tier: 2, id: "stone", name: "Stone Pickaxe", material: "stone", costPearls: 100, maxWallTier: 2, hits: 4 },
+  { tier: 3, id: "amber", name: "Amber Pickaxe", material: "amber", costPearls: 180, costAmber: 12, maxWallTier: 2, hits: 2 },
+  { tier: 4, id: "crystal", name: "Crystal Pickaxe", material: "crystal", costPearls: 300, costAmber: 25, maxWallTier: 3, hits: 2 },
+];
+
+const WALL_MATERIALS = {
+  clay: { name: "Clay Wall", tier: 1, hp: 4, color: "#8b8172", shine: "#b6a78d" },
+  stone: { name: "Stone Wall", tier: 2, hp: 6, color: "#68746d", shine: "#aab4ae" },
+  crystal: { name: "Crystal Wall", tier: 3, hp: 8, color: "#796c9d", shine: "#d9c8ff" },
+  concrete: { name: "Concrete", tier: 99, hp: 999, color: "#76828a", shine: "#c7d0d4" },
+};
 
 const URBAN_FEATURES = makeUrbanFeatures();
 
@@ -24,11 +40,14 @@ export function createTopDownState() {
     score: 8,
     pearls: 3,
     amber: 3,
+    pickaxeTier: 0,
     leapUpgrade: 0,
     leapTimer: 0,
     lilyBoostTimer: 0,
     discoveredStructures: new Set(),
     collectedPickups: new Set(),
+    minedWalls: new Set(),
+    wallDamage: new Map(),
     pointer: { x: frog.x, y: frog.y },
     chunks: new Map(),
     active: emptyActive(),
@@ -129,7 +148,7 @@ function getActiveTopDown(state) {
         state.chunks.set(key, generateTopDownChunk(cx, cy));
       }
       const chunk = state.chunks.get(key);
-      active.walls.push(...chunk.walls);
+      active.walls.push(...chunk.walls.filter((wall) => !state.minedWalls.has(wall.id)));
       active.water.push(...chunk.water);
       active.lilyPads.push(...chunk.lilyPads);
       active.structures.push(...chunk.structures);
@@ -227,6 +246,30 @@ export function findNearbyTopDownPlace(state) {
   }) ?? null;
 }
 
+export function getCurrentPickaxe(state) {
+  return PICKAXES.find((pickaxe) => pickaxe.tier === state.pickaxeTier) ?? PICKAXES[0];
+}
+
+export function findNearbyMineableWall(state) {
+  if (state.pickaxeTier <= 0) return null;
+  let nearest = null;
+  let nearestDistance = Infinity;
+  const frogCenter = { x: state.frog.x, y: state.frog.y };
+  for (const wall of state.active.walls) {
+    if (wall.mineable === false || state.minedWalls.has(wall.id)) continue;
+    const closestX = clamp(frogCenter.x, wall.x, wall.x + wall.w);
+    const closestY = clamp(frogCenter.y, wall.y, wall.y + wall.h);
+    const dx = frogCenter.x - closestX;
+    const dy = frogCenter.y - closestY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < MINE_RANGE && distance < nearestDistance) {
+      nearest = wall;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
 export function interactTopDownPlace(state, soundOn) {
   const place = findNearbyTopDownPlace(state);
   if (!place) {
@@ -252,6 +295,27 @@ export function interactTopDownPlace(state, soundOn) {
     return true;
   }
 
+  if (place.kind === "pickaxe") {
+    const nextPickaxe = PICKAXES.find((pickaxe) => pickaxe.tier === state.pickaxeTier + 1);
+    if (!nextPickaxe) {
+      setNotice(state, "Pickaxe Shop: you already have the strongest crystal pickaxe.");
+      return false;
+    }
+    const amberCost = nextPickaxe.costAmber ?? 0;
+    if (state.pearls < nextPickaxe.costPearls || state.amber < amberCost) {
+      const amberText = amberCost > 0 ? ` and ${amberCost} amber` : "";
+      setNotice(state, `Pickaxe Shop wants ${nextPickaxe.costPearls} pearls${amberText} for the ${nextPickaxe.name}.`);
+      if (soundOn) beep(160, 0.04);
+      return false;
+    }
+    state.pearls -= nextPickaxe.costPearls;
+    state.amber -= amberCost;
+    state.pickaxeTier = nextPickaxe.tier;
+    setNotice(state, `Bought ${nextPickaxe.name}. Press M near a wall to mine.`);
+    if (soundOn) beep(920, 0.06);
+    return true;
+  }
+
   if (state.score < 4) {
     setNotice(state, "Trading Place wants 4 flies for amber and pearls.");
     if (soundOn) beep(160, 0.04);
@@ -262,6 +326,44 @@ export function interactTopDownPlace(state, soundOn) {
   state.pearls += 1;
   setNotice(state, "Traded 4 flies for 1 amber and 1 pearl.");
   if (soundOn) beep(740, 0.05);
+  return true;
+}
+
+export function mineNearbyWall(state, soundOn) {
+  const pickaxe = getCurrentPickaxe(state);
+  if (pickaxe.tier <= 0) {
+    setNotice(state, "You need to buy a pickaxe before mining walls.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  const wall = findNearbyMineableWall(state);
+  if (!wall) {
+    setNotice(state, "No mineable wall close enough. Stand beside a generated wall and press M.");
+    return false;
+  }
+
+  const material = WALL_MATERIALS[wall.material ?? "clay"] ?? WALL_MATERIALS.clay;
+  if (pickaxe.maxWallTier < material.tier) {
+    setNotice(state, `${pickaxe.name} cannot mine ${material.name}. Upgrade your pickaxe material.`);
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  const damage = (state.wallDamage.get(wall.id) ?? 0) + 1;
+  const requiredHits = Math.max(1, Math.min(material.hp, pickaxe.hits));
+  if (damage >= requiredHits) {
+    state.wallDamage.delete(wall.id);
+    state.minedWalls.add(wall.id);
+    state.active.walls = state.active.walls.filter((item) => item.id !== wall.id);
+    setNotice(state, `${pickaxe.name} mined through a ${material.name}.`);
+    if (soundOn) beep(1040, 0.06);
+    return true;
+  }
+
+  state.wallDamage.set(wall.id, damage);
+  setNotice(state, `${material.name} cracked ${damage}/${requiredHits}.`);
+  if (soundOn) beep(520, 0.04);
   return true;
 }
 
@@ -345,14 +447,31 @@ function drawParks(ctx, state) {
 
 function drawWalls(ctx, state) {
   for (const wall of state.active.walls) {
-    ctx.fillStyle = wall.color ?? "#737c78";
+    const material = WALL_MATERIALS[wall.material ?? "clay"] ?? WALL_MATERIALS.clay;
+    const damage = state.wallDamage.get(wall.id) ?? 0;
+    ctx.fillStyle = material.color ?? wall.color ?? "#737c78";
     roundRect(ctx, wall.x, wall.y, wall.w, wall.h, 8);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillStyle = material.shine ?? "rgba(255,255,255,0.18)";
+    ctx.globalAlpha = 0.32;
     ctx.fillRect(wall.x + 10, wall.y + 9, Math.max(20, wall.w - 20), 10);
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = "rgba(35, 42, 38, 0.22)";
     ctx.lineWidth = 3;
     ctx.stroke();
+    if (damage > 0) {
+      ctx.strokeStyle = "#2d251f";
+      ctx.lineWidth = 3;
+      for (let i = 0; i < damage; i += 1) {
+        const crackX = wall.x + 22 + ((i * 53) % Math.max(24, wall.w - 44));
+        const crackY = wall.y + 18 + ((i * 37) % Math.max(20, wall.h - 36));
+        ctx.beginPath();
+        ctx.moveTo(crackX, crackY);
+        ctx.lineTo(crackX + 18, crackY + 15);
+        ctx.lineTo(crackX + 8, crackY + 30);
+        ctx.stroke();
+      }
+    }
   }
 }
 
@@ -378,6 +497,8 @@ function drawStructures(ctx, state) {
     ctx.globalAlpha = found ? 1 : 0.72;
     if (item.type === "upgradeShop") {
       drawShop(ctx, item, "#9d6cc7", "UP");
+    } else if (item.type === "pickaxeShop") {
+      drawShop(ctx, item, "#6f7b75", "PX");
     } else if (item.type === "tradePost") {
       drawShop(ctx, item, "#d58432", "TR");
     } else if (item.type === "urbanBuilding") {
@@ -541,6 +662,18 @@ function makeUrbanFeatures() {
       talk: "Press E to buy stronger lily leaps for 3 amber and 2 pearls.",
     },
     {
+      id: "pickaxe-shop",
+      type: "pickaxeShop",
+      name: "Pickaxe Shop",
+      kind: "pickaxe",
+      x: cx,
+      y: cy - 382,
+      w: 190,
+      h: 130,
+      fixed: true,
+      talk: "Press E to buy pickaxes. Stone costs 100 pearls and mines tougher walls.",
+    },
+    {
       id: "trading-place",
       type: "tradePost",
       name: "Trading Place",
@@ -566,6 +699,8 @@ function makeUrbanFeatures() {
     w: item.w,
     h: item.h,
     color: item.color,
+    material: "concrete",
+    mineable: false,
   }));
   const lilyPads = [
     { id: "park-pad-north", x: park.x + 130, y: park.y - 34, phase: 0.2 },

@@ -86,10 +86,10 @@ function ModeMenu({ onSelect }) {
       <div className="menu-copy">
         <div className="menu-kicker">
           <Sparkles size={18} />
-          Random structures, currencies, shops, and big exploration
+          Random structures, currencies, shops, pickaxes, and big exploration
         </div>
         <h1>FroggyLand</h1>
-        <p>Pick how you want to explore: side-scrolling caves and roads, or a huge top-down pond map with shops, water, walls, and lily-pad leaps.</p>
+        <p>Pick how you want to explore: side-scrolling caves and roads, or a huge top-down pond map with shops, water, walls, pickaxes, and lily-pad leaps.</p>
       </div>
       <div className="mode-card-grid">
         <button className="mode-card platform-card" type="button" onClick={() => onSelect("platformer")}>
@@ -100,7 +100,7 @@ function ModeMenu({ onSelect }) {
         <button className="mode-card topdown-card" type="button" onClick={() => onSelect("topdown")}>
           <span className="mode-icon"><Hammer size={28} /></span>
           <strong>Top Down Mode</strong>
-          <span>Roam a scrolling pondland, discover random huts and ruins, collect loot, and use shops.</span>
+          <span>Roam a scrolling pondland, discover random huts and ruins, collect loot, buy pickaxes, and mine walls.</span>
         </button>
       </div>
     </section>
