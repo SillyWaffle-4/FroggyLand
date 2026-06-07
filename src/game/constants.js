@@ -25,7 +25,10 @@ export const PLACED_PAD_HEIGHT = 22;
 export const DRAW_MARGIN = 180;
 export const ACTIVE_MARGIN = 360;
 export const MAX_PARTICLES = 48;
-export const MAX_ACTIVE_FLIES = 12;
+export const MAX_ACTIVE_FLIES = 16;
+export const MIN_LOCAL_FLIES = 7;
+export const FLY_DESPAWN_MARGIN = 1250;
+export const FLY_REFILL_INTERVAL = 0.45;
 export const TARGET_FRAME_MS = 1000 / 60;
 export const MAX_DT = 0.05;
 

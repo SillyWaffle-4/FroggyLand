@@ -2,11 +2,14 @@ import {
   ACTIVE_MARGIN,
   FROG_HEIGHT,
   FROG_WIDTH,
+  FLY_DESPAWN_MARGIN,
+  FLY_REFILL_INTERVAL,
   GRAVITY,
   JUMP_SPEED,
   LILYPAD_JUMP_SPEED,
   MAX_ACTIVE_FLIES,
   MAX_PARTICLES,
+  MIN_LOCAL_FLIES,
   MOVE_SPEED,
   PLACED_PAD_HEIGHT,
   PLACED_PAD_WIDTH,
@@ -357,14 +360,25 @@ export function placeLilyPad(state, pointer, soundOn) {
 }
 
 function updateFlies(state, dt) {
+  const tongueFlyId = state.tongue.caughtFlyId;
+  const minAnchorX = Math.min(state.cameraX, state.frog.x) - FLY_DESPAWN_MARGIN;
+  const maxAnchorX = Math.max(state.cameraX + VIEW_WIDTH, state.frog.x) + FLY_DESPAWN_MARGIN;
+
+  let writeIndex = 0;
   for (const fly of state.flies) {
     fly.age += dt;
     fly.x = fly.anchorX + Math.cos(fly.age * 1.8 + fly.wobble) * fly.orbit;
     fly.y = fly.anchorY + Math.sin(fly.age * 2.6 + fly.wobble * 0.7) * (fly.orbit * 0.55);
+    if (fly.id === tongueFlyId || (fly.anchorX >= minAnchorX && fly.anchorX <= maxAnchorX)) {
+      state.flies[writeIndex] = fly;
+      writeIndex += 1;
+    }
   }
+  state.flies.length = writeIndex;
 
-  if (state.flies.length >= MAX_ACTIVE_FLIES) {
-    state.flySpawnCooldown = 1.5;
+  const localSpawnPoints = state.active.flySpawnPoints;
+  if (!localSpawnPoints.length || state.flies.length >= MAX_ACTIVE_FLIES) {
+    state.flySpawnCooldown = Math.min(state.flySpawnCooldown, FLY_REFILL_INTERVAL);
     return;
   }
 
@@ -374,15 +388,17 @@ function updateFlies(state, dt) {
   }
 
   const used = new Set(state.flies.map((fly) => fly.anchorKey));
-  const openPoints = state.active.flySpawnPoints.filter((point) => !used.has(`${point.x}:${point.y}`));
+  const openPoints = localSpawnPoints.filter((point) => !used.has(`${point.x}:${point.y}`));
   const point = openPoints.length
     ? openPoints[Math.floor(Math.random() * openPoints.length)]
-    : state.active.flySpawnPoints[Math.floor(Math.random() * state.active.flySpawnPoints.length)];
+    : localSpawnPoints[Math.floor(Math.random() * localSpawnPoints.length)];
 
   if (point) {
     state.flies.push(makeFly(point));
   }
-  state.flySpawnCooldown = 1.2 + Math.random() * 1.1;
+  state.flySpawnCooldown = state.flies.length < MIN_LOCAL_FLIES
+    ? FLY_REFILL_INTERVAL
+    : 0.9 + Math.random() * 0.8;
 }
 
 function updateCheckpoint(state, soundOn) {
