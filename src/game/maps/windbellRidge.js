@@ -67,7 +67,7 @@ export const windbellRidge = {
     { x: 15495, y: 475, w: 260, text: "Windbell Ridge" },
     { x: 16475, y: 228, w: 300, text: "Long tongue helps here" },
     { x: 17255, y: 300, w: 330, text: "Amber coins buy extra pads" },
-    { x: 18025, y: 374, w: 280, text: "Current shrine finish" },
+    { x: 18025, y: 374, w: 280, text: "Mistfall steps ahead" },
   ],
   checkpoints: [
     { id: "ridge-bellpost", x: 17240, y: 345, spawnX: 17240, spawnY: 345 - FROG_HEIGHT },

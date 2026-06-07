@@ -6,8 +6,22 @@ import { deepCave } from "./maps/deepCave.js";
 import { sunkenGrotto } from "./maps/sunkenGrotto.js";
 import { opalMarsh } from "./maps/opalMarsh.js";
 import { windbellRidge } from "./maps/windbellRidge.js";
+import { mistfallSteps } from "./maps/mistfallSteps.js";
+import { lockrootHollow } from "./maps/lockrootHollow.js";
+import { lanternCoast } from "./maps/lanternCoast.js";
 
-const CHUNKS = [meadow, mushroomCave, canopyRuins, deepCave, sunkenGrotto, opalMarsh, windbellRidge];
+const CHUNKS = [
+  meadow,
+  mushroomCave,
+  canopyRuins,
+  deepCave,
+  sunkenGrotto,
+  opalMarsh,
+  windbellRidge,
+  mistfallSteps,
+  lockrootHollow,
+  lanternCoast,
+];
 const BUCKET_SIZE = 520;
 
 function flatten(key) {
@@ -38,9 +52,9 @@ function buildBuckets(items) {
 
 export const WORLD = {
   name: "Froggy Wilds",
-  worldWidth: 18150,
+  worldWidth: 27450,
   spawn: { x: 86, y: 498 },
-  goal: { x: 18055, y: 332 },
+  goal: { x: 27355, y: 345 },
   regions: CHUNKS.map(({ name, startX, endX }) => ({ name, startX, endX })),
   platforms: flatten("platforms"),
   waterZones: flatten("waterZones"),
