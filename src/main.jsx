@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Eye, EyeOff, Gamepad2, Hammer, Map, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Eye, EyeOff, Hammer, Map, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
 import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
@@ -198,21 +198,16 @@ function ModeMenu({ onSelect }) {
       <div className="menu-copy">
         <div className="menu-kicker">
           <Sparkles size={18} />
-          Random structures, currencies, shops, pickaxes, and big exploration
+          Top-down exploration, parkour houses, shops, pickaxes, and big rewards
         </div>
         <h1>FroggyLand</h1>
-        <p>Pick how you want to explore: side-scrolling caves and roads, or a huge top-down pond map with shops, water, walls, pickaxes, and lily-pad leaps.</p>
+        <p>Explore a huge pond map, build checkpoints, enter parkour houses, survive daytime birds, and unlock platformer rooms through the world.</p>
       </div>
       <div className="mode-card-grid">
-        <button className="mode-card platform-card" type="button" onClick={() => onSelect("platformer")}>
-          <span className="mode-icon"><Gamepad2 size={28} /></span>
-          <strong>Platformer Mode</strong>
-          <span>Open map, caves, cars, lily pad gates, currencies, relics, and generated structures.</span>
-        </button>
         <button className="mode-card topdown-card" type="button" onClick={() => onSelect("topdown")}>
           <span className="mode-icon"><Hammer size={28} /></span>
-          <strong>Top Down Mode</strong>
-          <span>Roam a scrolling pondland, discover random huts and ruins, collect loot, buy pickaxes, and mine walls.</span>
+          <strong>Play FroggyLand</strong>
+          <span>Start in top-down pondland, then find parkour houses and Market Hall platformer rooms inside the map.</span>
         </button>
       </div>
     </section>

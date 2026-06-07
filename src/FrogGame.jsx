@@ -39,6 +39,7 @@ export function FrogGame(props) {
 function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
   const isParkourEntry = entry.startsWith("parkour");
   const isShopEntry = entry === "shop";
+  const banksPlatformerLoot = isParkourEntry || isShopEntry;
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
   const progressRef = React.useRef(progress);
@@ -141,6 +142,9 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       } else if (isShopEntry) {
         unlockMarketCounter(stateRef.current);
       }
+      if (banksPlatformerLoot) {
+        bankPlatformerLoot(stateRef.current, onProgressChange);
+      }
       drawGame(context, stateRef.current);
 
       hudTimer += dt;
@@ -158,7 +162,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [entry, onProgressChange]);
+  }, [banksPlatformerLoot, entry, isParkourEntry, isShopEntry, onProgressChange]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -191,6 +195,13 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     stateRef.current.notice = message;
     stateRef.current.noticeTimer = 3;
     setHud(makeHud(stateRef.current, entry, progressRef.current));
+  };
+
+  const handleExitToTopDown = () => {
+    if (banksPlatformerLoot) {
+      bankPlatformerLoot(stateRef.current, onProgressChange);
+    }
+    onExitToTopDown?.();
   };
 
   return (
@@ -252,7 +263,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
               <button
                 type="button"
                 className="panel-button"
-                onClick={onExitToTopDown}
+                onClick={handleExitToTopDown}
               >
                 Return Top Down
               </button>
@@ -357,6 +368,29 @@ function unlockMarketCounter(state) {
   state.shopUnlocked = true;
   state.notice = "Market counter unlocked. Buy upgrades, trade, or shop furniture.";
   state.noticeTimer = 3.4;
+}
+
+function bankPlatformerLoot(state, onProgressChange) {
+  const synced = state.syncedPlatformerLoot ?? { score: 0, pearls: 0, amber: 0 };
+  const scoreDelta = Math.max(0, state.score - synced.score);
+  const pearlDelta = Math.max(0, state.pearls - synced.pearls);
+  const amberDelta = Math.max(0, state.amber - synced.amber);
+  if (scoreDelta <= 0 && pearlDelta <= 0 && amberDelta <= 0) {
+    return;
+  }
+
+  state.syncedPlatformerLoot = {
+    score: state.score,
+    pearls: state.pearls,
+    amber: state.amber,
+  };
+  onProgressChange?.((current) => ({
+    topDown: {
+      score: (current.topDown?.score ?? 0) + scoreDelta,
+      pearls: (current.topDown?.pearls ?? 0) + pearlDelta,
+      amber: (current.topDown?.amber ?? 0) + amberDelta,
+    },
+  }));
 }
 
 function runMarketAction(action, progress, onProgressChange) {
