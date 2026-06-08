@@ -5,7 +5,9 @@ import { drawGame } from "./game/renderer.js";
 import {
   createInitialState,
   findNearbyNpc,
+  getActiveWorld,
   placeLilyPad,
+  respawnFrog,
   startTongue,
   togglePlacementMode,
   tradeWithNearbyNpc,
@@ -19,6 +21,13 @@ const HOUSE_PARTS = [
   { id: "rug", name: "Leaf Rug" },
   { id: "lantern", name: "Glow Lantern" },
   { id: "trophy", name: "Parkour Trophy" },
+];
+
+const HOUSE_CRAFT_ITEMS = [
+  { part: "window", name: "Round Window", wood: 8 },
+  { part: "rug", name: "Leaf Rug", wood: 6 },
+  { part: "lantern", name: "Glow Lantern", wood: 10 },
+  { part: "trophy", name: "Parkour Trophy", wood: 16 },
 ];
 
 const PARKOUR_GOAL_X = 1500;
@@ -231,6 +240,31 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
     setHud(makeHud(stateRef.current, entry, progressRef.current));
   };
 
+  const handleHouseAction = (action) => {
+    const result = runHouseAction(action, progressRef.current, onProgressChange);
+    if (result.progress) {
+      progressRef.current = {
+        ...progressRef.current,
+        ...result.progress,
+        topDown: { ...(progressRef.current.topDown ?? {}), ...(result.progress.topDown ?? {}) },
+        houseParts: { ...(progressRef.current.houseParts ?? {}), ...(result.progress.houseParts ?? {}) },
+        placedInterior: { ...(progressRef.current.placedInterior ?? {}), ...(result.progress.placedInterior ?? {}) },
+        house: result.progress.house ?? progressRef.current.house,
+      };
+      const nextLevel = progressRef.current.house?.level ?? progressRef.current.topDown?.houseLevel ?? 1;
+      stateRef.current.section = housePlatformerSection(nextLevel, progressRef.current.placedInterior);
+      if (result.rebuildHouse) {
+        stateRef.current.activeCheckpoint = null;
+        respawnFrog(stateRef.current);
+      } else {
+        stateRef.current.active = getActiveWorld(stateRef.current.cameraX, stateRef.current.frog.x, stateRef.current.section);
+      }
+    }
+    stateRef.current.notice = result.message;
+    stateRef.current.noticeTimer = 3.4;
+    setHud(makeHud(stateRef.current, entry, progressRef.current));
+  };
+
   const handleExitToTopDown = () => {
     if (banksPlatformerLoot) {
       bankPlatformerLoot(stateRef.current, onProgressChange);
@@ -301,6 +335,18 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
             <span>Range</span>
             <strong>{hud.tongueRange}</strong>
           </div>
+          {hud.isHouseEntry && (
+            <>
+              <div>
+                <span>Wood</span>
+                <strong>{hud.wood}</strong>
+              </div>
+              <div>
+                <span>House</span>
+                <strong>{hud.houseLevel}</strong>
+              </div>
+            </>
+          )}
           {hud.canReturnTopDown && (
             <div>
               <span>Parts</span>
@@ -308,7 +354,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
             </div>
           )}
         </div>
-        {(hud.canTrade || hud.canPlace || hud.canReturnTopDown || hud.marketAction) && (
+        {(hud.canTrade || hud.canPlace || hud.canReturnTopDown || hud.marketAction || hud.isHouseEntry) && (
           <div className="action-grid">
             {hud.canReturnTopDown && (
               <button
@@ -346,6 +392,24 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
                 {hud.placementMode ? "Stop Placing" : "Place Pad"}
               </button>
             )}
+            {hud.isHouseEntry && (
+              <>
+                <button
+                  type="button"
+                  className="panel-button"
+                  onClick={() => handleHouseAction("craft")}
+                >
+                  Craft {hud.nextCraftName}
+                </button>
+                <button
+                  type="button"
+                  className="panel-button"
+                  onClick={() => handleHouseAction("upgrade")}
+                >
+                  Upgrade House
+                </button>
+              </>
+            )}
           </div>
         )}
         <p className="notice">{hud.nearbyNpcName ? `Near ${hud.nearbyNpcName}. ${hud.notice}` : hud.notice}</p>
@@ -354,6 +418,8 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
           {!hud.tutorialComplete && <span><kbd>W</kbd><kbd>Space</kbd> Jump</span>}
           <span><kbd>Click</kbd> Tongue</span>
           {hud.marketAction ? <span><kbd>E</kbd> Shop</span> : hud.canTrade && <span><kbd>E</kbd> Trade</span>}
+          {hud.isHouseEntry && <span><kbd>Craft</kbd> Wood furniture</span>}
+          {hud.isHouseEntry && <span><kbd>Upgrade</kbd> Expand house</span>}
           {hud.canPlace && <span><kbd>P</kbd> Place</span>}
           {hud.canReturnTopDown && <span><kbd>Modes</kbd> Return</span>}
         </div>
@@ -369,15 +435,21 @@ function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
   const nearbyNpc = findNearbyNpc(state);
   const partTotal = Object.values(progress.houseParts ?? {}).reduce((total, value) => total + value, 0);
   const topDown = progress.topDown ?? {};
+  const nextCraft = HOUSE_CRAFT_ITEMS[(topDown.furnitureShopIndex ?? 0) % HOUSE_CRAFT_ITEMS.length];
+  const houseLevel = progress.house?.level ?? topDown.houseLevel ?? 0;
   const marketAction = isShopEntry ? nearbyNpc?.marketAction ?? null : null;
   return {
     regionName: isParkourEntry ? "Parkour House" : isShopEntry ? "Market Hall" : isHouseEntry ? `House Lv ${progress.house?.level ?? topDown.houseLevel ?? 1}` : state.regionName,
-    score: isShopEntry ? topDown.score ?? 0 : state.score,
+    score: (isShopEntry || isHouseEntry) ? topDown.score ?? 0 : state.score,
     lilyPads: state.lilyPads,
-    pearls: isShopEntry ? topDown.pearls ?? 0 : state.pearls,
-    amber: isShopEntry ? topDown.amber ?? 0 : state.amber,
+    pearls: (isShopEntry || isHouseEntry) ? topDown.pearls ?? 0 : state.pearls,
+    amber: (isShopEntry || isHouseEntry) ? topDown.amber ?? 0 : state.amber,
     relics: state.collectedRelics.size,
     totalRelics: WORLD.relics.length,
+    isHouseEntry,
+    wood: topDown.materials?.wood ?? 0,
+    houseLevel: houseLevel ? `Lv ${houseLevel}` : "None",
+    nextCraftName: `${nextCraft.name} (${nextCraft.wood} wood)`,
     placementMode: state.placementMode,
     nearbyNpcName: nearbyNpc?.name ?? null,
     canTrade: Boolean(nearbyNpc),
@@ -540,6 +612,76 @@ function runMarketAction(action, progress, onProgressChange) {
   grantPart[item.part] = (progress.houseParts?.[item.part] ?? 0) + 1;
   onProgressChange?.({ topDown: nextTopDown, houseParts: grantPart, placedInterior: grantPart });
   return `Bought ${item.name} for your house.`;
+}
+
+function runHouseAction(action, progress, onProgressChange) {
+  const topDown = progress.topDown ?? {};
+  const nextTopDown = {
+    ...topDown,
+    materials: { wood: 0, clay: 0, stone: 0, crystal: 0, water: 0, ...(topDown.materials ?? {}) },
+  };
+
+  if (action === "craft") {
+    if (!progress.house) {
+      return { message: "Build your house in top-down first." };
+    }
+    const craftIndex = nextTopDown.furnitureShopIndex ?? 0;
+    const item = HOUSE_CRAFT_ITEMS[craftIndex % HOUSE_CRAFT_ITEMS.length];
+    if ((nextTopDown.materials.wood ?? 0) < item.wood) {
+      return { message: `${item.name} needs ${item.wood} wood. Chop trees with your tongue first.` };
+    }
+    nextTopDown.materials.wood -= item.wood;
+    nextTopDown.furnitureShopIndex = craftIndex + 1;
+    const houseParts = {
+      [item.part]: (progress.houseParts?.[item.part] ?? 0) + 1,
+    };
+    const placedInterior = {
+      [item.part]: (progress.placedInterior?.[item.part] ?? 0) + 1,
+    };
+    const patch = { topDown: nextTopDown, houseParts, placedInterior };
+    onProgressChange?.(patch);
+    return {
+      message: `Crafted ${item.name} from ${item.wood} wood.`,
+      progress: patch,
+      rebuildHouse: false,
+    };
+  }
+
+  if (action === "upgrade") {
+    if (!progress.house) {
+      return { message: "Build your house in top-down first." };
+    }
+    const currentLevel = Math.max(1, progress.house.level ?? nextTopDown.houseLevel ?? 1);
+    if (currentLevel >= 20) {
+      return { message: "Your house is already level 20." };
+    }
+    const nextLevel = currentLevel + 1;
+    const cost = getHouseUpgradeCost(nextLevel);
+    if (!canAffordMarketCost(nextTopDown, cost.currency) || !canAffordMaterials(nextTopDown.materials, cost.materials)) {
+      return { message: `House level ${nextLevel} costs ${houseUpgradeCostLabel(cost)}.` };
+    }
+    spendMarketCost(nextTopDown, cost.currency);
+    spendMaterials(nextTopDown.materials, cost.materials);
+    nextTopDown.houseLevel = nextLevel;
+    const patch = {
+      topDown: nextTopDown,
+      house: { ...progress.house, level: nextLevel },
+    };
+    onProgressChange?.(patch);
+    return {
+      message: houseUpgradeMessage(nextLevel),
+      progress: patch,
+      rebuildHouse: true,
+    };
+  }
+
+  return { message: "No house action selected." };
+}
+
+function houseUpgradeMessage(level) {
+  if (level === 10) return "House upgraded to level 10. A ladder and second floor appeared.";
+  if (level === 20) return "House upgraded to level 20. Five downstairs rooms and four upstairs rooms are open.";
+  return `House upgraded to level ${level}. The playable house expanded.`;
 }
 
 function marketActionButtonLabel(action) {
