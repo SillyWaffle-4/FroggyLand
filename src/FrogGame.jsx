@@ -44,7 +44,7 @@ export function FrogGame(props) {
   return <PlatformerGame {...props} />;
 }
 
-function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, onProgressChange, onExitToTopDown }) {
+function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS, graphicsQuality = "low", onProgressChange, onExitToTopDown }) {
   const isParkourEntry = entry.startsWith("parkour");
   const isShopEntry = entry === "shop";
   const isHouseEntry = entry === "houseInterior";
@@ -152,7 +152,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
   React.useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d", { alpha: false });
-    context.imageSmoothingEnabled = false;
+    context.imageSmoothingEnabled = graphicsQuality !== "max";
     let frameId;
     let last = performance.now();
     let lastFrame = last;
@@ -192,6 +192,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       if (banksPlatformerLoot) {
         bankPlatformerLoot(stateRef.current, onProgressChange);
       }
+      context.imageSmoothingEnabled = graphicsQuality !== "max";
       drawGame(context, stateRef.current);
 
       if (stateRef.current.forceTopDownReturn && !sectionReturnQueuedRef.current) {
@@ -222,7 +223,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       cancelAnimationFrame(frameId);
       if (autoExitId) window.clearTimeout(autoExitId);
     };
-  }, [banksPlatformerLoot, entry, isParkourEntry, isShopEntry, onExitToTopDown, onProgressChange]);
+  }, [banksPlatformerLoot, entry, graphicsQuality, isParkourEntry, isShopEntry, onExitToTopDown, onProgressChange]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();

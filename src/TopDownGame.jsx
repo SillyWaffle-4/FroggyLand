@@ -25,7 +25,7 @@ import {
   updateTopDownGame,
 } from "./game/topDownMode.js";
 
-export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatformer }) {
+export function TopDownGame({ soundOn, progress, graphicsQuality = "low", onProgressChange, onEnterPlatformer }) {
   const canvasRef = React.useRef(null);
   const wrapperRef = React.useRef(null);
   const stateRef = React.useRef(createTopDownState(progress));
@@ -180,7 +180,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
   React.useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d", { alpha: false });
-    context.imageSmoothingEnabled = false;
+    context.imageSmoothingEnabled = graphicsQuality !== "max";
     let frameId;
     let last = performance.now();
     let lastFrame = last;
@@ -204,6 +204,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
       lastFrame = now;
       updateTopDownGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
       
+      context.imageSmoothingEnabled = graphicsQuality !== "max";
       drawTopDownGame(context, stateRef.current);
 
       hudTimer += dt;
@@ -226,7 +227,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [syncTopDownProgress]);
+  }, [graphicsQuality, syncTopDownProgress]);
 
   const pointerToWorld = React.useCallback((event) => {
     const rect = canvasRef.current.getBoundingClientRect();

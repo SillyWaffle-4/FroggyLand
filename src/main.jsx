@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Car, Eye, EyeOff, Hammer, Map, Play, RotateCcw, Sparkles, Trees, Trophy, Volume2, VolumeX, Waves } from "lucide-react";
+import { Car, Eye, EyeOff, Hammer, Map, Play, RotateCcw, Settings, Sparkles, Trees, Trophy, Volume2, VolumeX, Waves } from "lucide-react";
 import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
@@ -69,6 +69,20 @@ const ACHIEVEMENTS = [
   { id: "full-house", name: "Full House", test: (progress) => (progress.house?.level ?? progress.topDown?.houseLevel ?? 0) >= 20 },
 ];
 
+const GRAPHICS_OPTIONS = [
+  { id: "low", name: "Low", label: "Normal Art" },
+  { id: "max", name: "Max", label: "Pixel Art" },
+];
+
+function loadGraphicsQuality() {
+  try {
+    const saved = localStorage.getItem("froggyland-graphics-quality");
+    return GRAPHICS_OPTIONS.some((option) => option.id === saved) ? saved : "low";
+  } catch {
+    return "low";
+  }
+}
+
 function loadProgress() {
   try {
     const saved = JSON.parse(localStorage.getItem("froggyland-progress") ?? "null");
@@ -99,6 +113,7 @@ function App() {
   const [platformerEntry, setPlatformerEntry] = React.useState("openMap");
   const [progress, setProgress] = React.useState(loadProgress);
   const [chromeHidden, setChromeHidden] = React.useState(false);
+  const [graphicsQuality, setGraphicsQuality] = React.useState(loadGraphicsQuality);
 
   const updateProgress = React.useCallback((updater) => {
     setProgress((current) => {
@@ -131,15 +146,31 @@ function App() {
     localStorage.setItem("froggyland-progress", JSON.stringify(progress));
   }, [progress]);
 
+  React.useEffect(() => {
+    localStorage.setItem("froggyland-graphics-quality", graphicsQuality);
+  }, [graphicsQuality]);
+
   const enterPlatformer = React.useCallback((entry = "openMap") => {
     setPlatformerEntry(entry);
     setMode("platformer");
     setRunId((value) => value + 1);
   }, []);
 
+  if (mode === "settings") {
+    return (
+      <main className={`app-shell menu-shell quality-${graphicsQuality}`}>
+        <SettingsPage
+          graphicsQuality={graphicsQuality}
+          onGraphicsQualityChange={setGraphicsQuality}
+          onBack={() => setMode(null)}
+        />
+      </main>
+    );
+  }
+
   if (!mode) {
     return (
-      <main className="app-shell menu-shell">
+      <main className={`app-shell menu-shell quality-${graphicsQuality}`}>
         <ModeMenu
           onSelect={(nextMode) => {
             if (nextMode === "platformer") {
@@ -154,7 +185,7 @@ function App() {
   }
 
   return (
-    <main className={`app-shell play-shell ${chromeHidden ? "chrome-hidden" : ""}`}>
+    <main className={`app-shell play-shell quality-${graphicsQuality} ${chromeHidden ? "chrome-hidden" : ""}`}>
       {!chromeHidden && (
         <section className="topbar" aria-label="Game controls">
           <div>
@@ -173,6 +204,15 @@ function App() {
             >
               <Map size={17} />
               Modes
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setMode("settings")}
+              aria-label="Open settings"
+              title="Settings"
+            >
+              <Settings size={20} />
             </button>
             <button
               className="icon-button"
@@ -223,6 +263,7 @@ function App() {
           soundOn={soundOn}
           entry={platformerEntry}
           progress={progress}
+          graphicsQuality={graphicsQuality}
           onProgressChange={updateProgress}
           onExitToTopDown={() => setMode("topdown")}
         />
@@ -231,6 +272,7 @@ function App() {
           key={`topdown-${runId}`}
           soundOn={soundOn}
           progress={progress}
+          graphicsQuality={graphicsQuality}
           onProgressChange={updateProgress}
           onEnterPlatformer={enterPlatformer}
         />
@@ -298,6 +340,51 @@ function ModeMenu({ onSelect }) {
           <strong>Start Exploring</strong>
           <span>Top-down pondland begins near the city, with shops, parkour houses, lily leaps, pickaxes, and traffic hazards.</span>
           <span className="mode-card-action">Play now <Hammer size={16} /></span>
+        </button>
+        <button className="mode-card settings-card" type="button" onClick={() => onSelect("settings")}>
+          <span className="mode-icon"><Settings size={28} /></span>
+          <strong>Settings</strong>
+          <span>Graphics quality preferences.</span>
+          <span className="mode-card-action">Open <Settings size={16} /></span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SettingsPage({ graphicsQuality, onGraphicsQualityChange, onBack }) {
+  return (
+    <section className="settings-page" aria-label="Settings">
+      <div className="settings-copy">
+        <div className="menu-kicker">
+          <Settings size={18} />
+          Settings
+        </div>
+        <h1>Settings</h1>
+      </div>
+      <div className="settings-panel">
+        <div className="settings-row">
+          <div>
+            <span>Graphics Quality</span>
+            <strong>{GRAPHICS_OPTIONS.find((option) => option.id === graphicsQuality)?.label ?? "Normal Art"}</strong>
+          </div>
+          <div className="segmented-control" role="group" aria-label="Graphics quality">
+            {GRAPHICS_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={graphicsQuality === option.id ? "selected" : ""}
+                onClick={() => onGraphicsQualityChange(option.id)}
+              >
+                <span>{option.name}</span>
+                <strong>{option.label}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+        <button className="mode-chip settings-back" type="button" onClick={onBack}>
+          <Map size={17} />
+          Modes
         </button>
       </div>
     </section>

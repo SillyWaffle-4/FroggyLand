@@ -471,6 +471,11 @@ button {
   color: #a15e24;
 }
 
+.settings-card .mode-icon {
+  background: #e8f1ff;
+  color: #35669c;
+}
+
 .mode-card strong {
   font-size: 1.35rem;
   line-height: 1.05;
@@ -495,6 +500,102 @@ button {
   font-size: 0.94rem;
   font-weight: 900;
   box-shadow: inset 0 -2px 0 rgba(20, 55, 35, 0.16);
+}
+
+.settings-page {
+  width: min(860px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.settings-copy {
+  color: #f8fff3;
+  text-shadow: 0 2px 18px rgba(13, 37, 27, 0.34);
+}
+
+.settings-copy h1 {
+  margin: 10px 0 0;
+  font-size: clamp(3rem, 9vw, 6rem);
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(22, 53, 36, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(15, 40, 31, 0.32);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(260px, 1.25fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.settings-row > div:first-child {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid rgba(26, 64, 42, 0.14);
+  border-radius: 8px;
+  background: #f4fbef;
+}
+
+.settings-row span {
+  color: #5d7165;
+  font-size: 0.8rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.settings-row strong {
+  color: #173820;
+  font-size: 1.05rem;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(26, 64, 42, 0.14);
+  border-radius: 8px;
+  background: rgba(231, 245, 223, 0.74);
+}
+
+.segmented-control button {
+  min-height: 78px;
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+  color: #21452f;
+  cursor: pointer;
+}
+
+.segmented-control button.selected {
+  border-color: rgba(47, 125, 70, 0.42);
+  background: #fff1cf;
+  box-shadow: inset 0 -3px 0 rgba(20, 55, 35, 0.12);
+}
+
+.segmented-control button span {
+  color: #356342;
+}
+
+.settings-back {
+  justify-self: start;
 }
 
 .game-layout {
@@ -530,6 +631,14 @@ canvas {
   touch-action: none;
   background: #87d8ff;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.quality-low canvas {
+  image-rendering: auto;
+}
+
+.quality-max canvas {
+  image-rendering: pixelated;
 }
 
 canvas:focus-visible {
@@ -1266,6 +1375,11 @@ kbd {
   }
 
   .teleport-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-row,
+  .segmented-control {
     grid-template-columns: 1fr;
   }
 }
