@@ -21,7 +21,6 @@ export function randomPlatformerSection(entry = "") {
   const index = Math.abs(hashString(entry || "parkour-house")) % PARKOUR_SECTION_LIBRARY.length;
   return makeSection(PARKOUR_SECTION_LIBRARY[index], entry, {
     forceReturn: true,
-    interiorKind: "parkour-house",
     noNpcs: true,
   });
 }

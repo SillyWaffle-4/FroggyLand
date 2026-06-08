@@ -1006,17 +1006,20 @@ function drawFrog(ctx, frog, time) {
 
   ctx.save();
   ctx.translate(frog.x + FROG_WIDTH / 2, frog.y + FROG_HEIGHT / 2);
-  ctx.scale(frog.facing, 1);
   ctx.fillStyle = frog.grounded ? "rgba(19, 36, 26, 0.16)" : "rgba(19, 36, 26, 0.24)";
   ctx.beginPath();
   ctx.ellipse(0, FROG_HEIGHT / 2 + 8, frog.grounded ? 27 : 22, frog.grounded ? 7 : 5, 0, 0, Math.PI * 2);
   ctx.fill();
   if (imageReady(FROG_SPRITE)) {
     const bob = frog.grounded ? Math.sin(time * 10) * 1.5 : 0;
-    ctx.drawImage(FROG_SPRITE, -FROG_WIDTH * 0.6, -FROG_HEIGHT * 0.72 + bob, FROG_WIDTH * 1.2, (FROG_HEIGHT + 8) * 1.2);
+    const spriteH = 64;
+    const spriteW = spriteH * (FROG_SPRITE.naturalWidth / FROG_SPRITE.naturalHeight);
+    ctx.scale(-frog.facing, 1);
+    ctx.drawImage(FROG_SPRITE, -spriteW / 2, -spriteH / 2 + bob, spriteW, spriteH);
     ctx.restore();
     return;
   }
+  ctx.scale(frog.facing, 1);
   ctx.fillStyle = frog.onLilypad ? "#75dc52" : frog.inWater ? "#5bc88f" : "#60cb55";
   ctx.beginPath();
   ctx.ellipse(0, 6, 30, 21 * squish, 0, 0, Math.PI * 2);

@@ -46,9 +46,9 @@ export function generatePlatformerStructures(worldWidth, seed = 707) {
 
 export const TOP_DOWN_CHUNK_SIZE = 1200;
 export const TOP_DOWN_URBAN = {
-  x: TOP_DOWN_WORLD_SIZE / 2 - 930,
+  x: TOP_DOWN_WORLD_SIZE / 2 - 1620,
   y: TOP_DOWN_WORLD_SIZE / 2 - 720,
-  w: 1860,
+  w: 3240,
   h: 1440,
 };
 
@@ -503,7 +503,6 @@ function makeChunkTraffic(roads, chunkX, chunkY) {
         offset: (lane * 0.43 + Math.abs(chunkX * 0.17 + chunkY * 0.11)) % 1,
         direction: lane % 2 === 0 ? 1 : -1,
         color: colors[(Math.abs(chunkX) + Math.abs(chunkY) + lane) % colors.length],
-        stealsFlies: 5,
       });
     }
   }

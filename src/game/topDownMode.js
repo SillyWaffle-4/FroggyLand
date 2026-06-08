@@ -414,6 +414,7 @@ function getActiveTopDown(state) {
     }
   }
 
+  active.water.push(...URBAN_FEATURES.water.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.water = mergeWaterRects(active.water);
 
   active.roads.push(...URBAN_FEATURES.roads.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
@@ -608,8 +609,9 @@ function updateBirdHazard(state, dt, soundOn) {
       setNotice(state, "The bird missed. Water kept you safe.", 2.6);
       if (soundOn) beep(680, 0.05);
     } else {
-      state.score = 0;
-      setNotice(state, "A bird got you and stole all your flies. Water is the safe zone.", 3.4);
+      const lostFlies = Math.ceil(state.score / 2);
+      state.score = Math.max(0, state.score - lostFlies);
+      setNotice(state, `A bird got you and stole ${lostFlies} flies. Water is the safe zone.`, 3.4);
       if (soundOn) beep(120, 0.1);
     }
     state.bird = null;
@@ -624,13 +626,14 @@ function updateVehicleHazards(state, soundOn) {
   if (!car) return;
 
   state.hurtCooldown = VEHICLE_HIT_COOLDOWN;
-  state.score = Math.max(0, state.score - (car.stealsFlies ?? 5));
+  const lostPearls = Math.ceil(state.pearls / 2);
+  state.pearls = Math.max(0, state.pearls - lostPearls);
   const safeSpot = getVehicleRespawnSpot(state);
   state.frog.x = safeSpot.x;
   state.frog.y = safeSpot.y;
   updateCamera(state);
   state.active = getActiveTopDown(state);
-  setNotice(state, `${car.name ?? "Traffic"} crashed into you and scattered some flies. Roads are city hazards.`, 3.4);
+  setNotice(state, `${car.name ?? "Traffic"} crashed into you and stole ${lostPearls} pearls. Roads are city hazards.`, 3.4);
   if (soundOn) beep(115, 0.12);
 }
 
@@ -1220,7 +1223,6 @@ function spawnOffroadCars(state) {
       direction: Math.random() > 0.5 ? 1 : -1,
       axis: isHorizontal ? "x" : "y",
       color: colors[Math.floor(Math.random() * colors.length)],
-      stealsFlies: 5,
       offroad: true,
     };
     state.spawnedCars.push(car);
@@ -1273,27 +1275,27 @@ function drawRoads(ctx, state) {
 function drawVehicles(ctx, state) {
   for (const car of state.active.cars) {
     const rect = getTopDownVehicleRect(car, state.time);
+    const vehicleW = car.carW ?? (car.axis === "y" ? rect.h : rect.w);
+    const vehicleH = car.carH ?? (car.axis === "y" ? rect.w : rect.h);
+    const angle = car.axis === "y"
+      ? (car.direction === 1 ? Math.PI / 2 : -Math.PI / 2)
+      : (car.direction === 1 ? 0 : Math.PI);
     ctx.save();
     ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
-    if (car.axis === "y") {
-      ctx.rotate(Math.PI / 2);
-    }
-    if (car.direction === -1) {
-      ctx.rotate(Math.PI);
-    }
+    ctx.rotate(angle);
     ctx.fillStyle = "rgba(18, 26, 23, 0.25)";
-    roundRect(ctx, -rect.w / 2 + 4, -rect.h / 2 + 8, rect.w - 8, rect.h, 9);
+    roundRect(ctx, -vehicleW / 2 + 4, -vehicleH / 2 + 8, vehicleW - 8, vehicleH, 9);
     ctx.fill();
     ctx.fillStyle = car.color ?? "#e65b4f";
-    roundRect(ctx, -rect.w / 2, -rect.h / 2, rect.w, rect.h, 9);
+    roundRect(ctx, -vehicleW / 2, -vehicleH / 2, vehicleW, vehicleH, 9);
     ctx.fill();
     ctx.fillStyle = "rgba(222, 246, 255, 0.78)";
-    roundRect(ctx, -rect.w / 4, -rect.h / 2 + 5, rect.w / 2, 10, 4);
+    roundRect(ctx, -vehicleW / 4, -vehicleH / 2 + 5, vehicleW / 2, 10, 4);
     ctx.fill();
     ctx.fillStyle = "#fff0a8";
-    const headlightX = car.direction === -1 ? rect.w / 2 - 14 : -rect.w / 2 + 8;
-    ctx.fillRect(headlightX, -rect.h / 2 + 5, 6, 8);
-    ctx.fillRect(headlightX, rect.h / 2 - 13, 6, 8);
+    const headlightX = vehicleW / 2 - 14;
+    ctx.fillRect(headlightX, -vehicleH / 2 + 5, 6, 8);
+    ctx.fillRect(headlightX, vehicleH / 2 - 13, 6, 8);
     ctx.restore();
   }
 }
@@ -1696,7 +1698,12 @@ function drawFrog(ctx, state) {
   ctx.ellipse(0, leaping ? 48 : 31, leaping ? 34 : 29, leaping ? 8 : 9, 0, 0, Math.PI * 2);
   ctx.fill();
   if (imageReady(FROG_SPRITE)) {
-    ctx.drawImage(FROG_SPRITE, -31, -35, 62, 72);
+    const spriteH = 76;
+    const spriteW = spriteH * (FROG_SPRITE.naturalWidth / FROG_SPRITE.naturalHeight);
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(FROG_SPRITE, -spriteW / 2, -38, spriteW, spriteH);
+    ctx.restore();
     ctx.restore();
     return;
   }
@@ -1839,15 +1846,17 @@ function makeUrbanFeatures() {
   ];
   const roads = [
     { id: "city-main-east-west", x: x - 260, y: cy - 76, w: TOP_DOWN_URBAN.w + 520, h: 152 },
-    { id: "city-main-north-south", x: cx - 76, y: y - 240, w: 152, h: TOP_DOWN_URBAN.h + 480 },
+    { id: "city-main-west-north-south", x: cx - 690, y: y - 240, w: 152, h: TOP_DOWN_URBAN.h + 480 },
+    { id: "city-main-east-north-south", x: cx + 538, y: y - 240, w: 152, h: TOP_DOWN_URBAN.h + 480 },
     { id: "city-north-long-road", x: x - 180, y: y + 252, w: TOP_DOWN_URBAN.w + 360, h: 104 },
     { id: "city-south-long-road", x: x - 180, y: y + TOP_DOWN_URBAN.h - 360, w: TOP_DOWN_URBAN.w + 360, h: 104 },
-    { id: "city-west-long-road", x: x + 335, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
-    { id: "city-east-long-road", x: x + TOP_DOWN_URBAN.w - 435, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
+    { id: "city-west-long-road", x: x + 475, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
+    { id: "city-east-long-road", x: x + TOP_DOWN_URBAN.w - 575, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
     { id: "city-crosswalk-park-east", kind: "crosswalk", x: park.x + park.w + 78, y: cy - 62, w: 72, h: 124 },
-    { id: "city-crosswalk-market", kind: "crosswalk", x: cx + 275, y: cy - 76, w: 84, h: 152 },
-    { id: "city-crosswalk-west", kind: "crosswalk", x: cx - 76, y: cy + 260, w: 152, h: 72 },
+    { id: "city-crosswalk-market", kind: "crosswalk", x: cx + 690, y: cy - 76, w: 84, h: 152 },
+    { id: "city-crosswalk-west", kind: "crosswalk", x: cx - 690, y: cy + 260, w: 152, h: 72 },
   ];
+  water.push(...makeRoadsideWater(roads));
   const cars = makeUrbanTraffic(roads);
   const shops = [
     {
@@ -1855,8 +1864,8 @@ function makeUrbanFeatures() {
       type: "marketHall",
       name: "Market Hall",
       kind: "market",
-      x: cx + 370,
-      y: cy - 382,
+      x: cx + 835,
+      y: cy - 250,
       w: 250,
       h: 150,
       fixed: true,
@@ -1984,7 +1993,6 @@ function makeUrbanTraffic(roads) {
         carW: lane === 0 && road.id.includes("main") ? 118 : 82,
         carH: lane === 0 && road.id.includes("main") ? 34 : 30,
         color: palette[(lane + road.id.length) % palette.length],
-        stealsFlies: lane === 0 && road.id.includes("main") ? 8 : 5,
       });
     }
   }
@@ -2051,6 +2059,26 @@ function formatTime(seconds) {
   const minutes = Math.floor(whole / 60);
   const rest = whole % 60;
   return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function makeRoadsideWater(roads) {
+  const canals = [];
+  for (const road of roads) {
+    if (road.kind === "crosswalk") continue;
+    const horizontal = road.w >= road.h;
+    if (horizontal) {
+      canals.push(
+        { id: `${road.id}-canal-north`, x: road.x + 42, y: road.y - 54, w: road.w - 84, h: 38, urban: true, round: 12 },
+        { id: `${road.id}-canal-south`, x: road.x + 42, y: road.y + road.h + 16, w: road.w - 84, h: 38, urban: true, round: 12 },
+      );
+    } else {
+      canals.push(
+        { id: `${road.id}-canal-west`, x: road.x - 52, y: road.y + 44, w: 36, h: road.h - 88, urban: true, round: 12 },
+        { id: `${road.id}-canal-east`, x: road.x + road.w + 16, y: road.y + 44, w: 36, h: road.h - 88, urban: true, round: 12 },
+      );
+    }
+  }
+  return canals;
 }
 
 function structureName(type) {
