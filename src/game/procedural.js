@@ -226,16 +226,16 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     }
   }
 
-  // Density-based standalone pool generation (increased for 35%+ coverage)
-  const waterCountMap = { sparse: 6, normal: 8.5, dense: 12 };
-  const waterCount = Math.floor(waterCountMap[density] + next() * 4);
+  // Density-based standalone pool generation. Big water is core to top-down traversal.
+  const waterCountMap = { sparse: 9, normal: 12, dense: 16 };
+  const waterCount = Math.floor(waterCountMap[density] + next() * 5);
   
   for (let i = 0; i < waterCount; i += 1) {
-    const minW = density === "sparse" ? 220 : 260;
-    const maxW = density === "dense" ? 480 : 380;
+    const minW = density === "sparse" ? 300 : 340;
+    const maxW = density === "dense" ? 640 : 520;
     const w = minW + Math.floor(next() * (maxW - minW));
-    const minH = density === "sparse" ? 160 : 180;
-    const maxH = density === "dense" ? 380 : 300;
+    const minH = density === "sparse" ? 220 : 250;
+    const maxH = density === "dense" ? 500 : 420;
     const h = minH + Math.floor(next() * (maxH - minH));
     
     const pool = {
@@ -347,12 +347,12 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
 }
 
 function ensureWaterCoverage(water, lilyPads, chunkRect, next, chunkX, chunkY) {
-  const targetArea = TOP_DOWN_CHUNK_SIZE * TOP_DOWN_CHUNK_SIZE * 0.38;
+  const targetArea = TOP_DOWN_CHUNK_SIZE * TOP_DOWN_CHUNK_SIZE * 0.54;
   let area = estimatedWaterArea(water, chunkRect);
   let attempts = 0;
-  while (area < targetArea && attempts < 10) {
-    const w = 320 + Math.floor(next() * 420);
-    const h = 240 + Math.floor(next() * 360);
+  while (area < targetArea && attempts < 16) {
+    const w = 420 + Math.floor(next() * 520);
+    const h = 320 + Math.floor(next() * 440);
     const pond = {
       id: `coverage-water-${chunkX}-${chunkY}-${attempts}`,
       type: "water",
@@ -391,8 +391,8 @@ function generateUrbanChunk(chunkX, chunkY, next) {
   const baseY = chunkY * TOP_DOWN_CHUNK_SIZE;
   const districtX = baseX + 110 + Math.floor(next() * 120);
   const districtY = baseY + 110 + Math.floor(next() * 120);
-  const districtW = 880 + Math.floor(next() * 140);
-  const districtH = 820 + Math.floor(next() * 150);
+  const districtW = 980 + Math.floor(next() * 170);
+  const districtH = 930 + Math.floor(next() * 190);
   const cx = districtX + districtW / 2;
   const cy = districtY + districtH / 2;
   const park = {
@@ -403,11 +403,11 @@ function generateUrbanChunk(chunkX, chunkY, next) {
     h: 150 + Math.floor(next() * 70),
   };
   const roads = [
-    { id: `urban-road-h-${chunkX}-${chunkY}`, x: districtX + 40, y: cy - 48, w: districtW - 80, h: 96 },
-    { id: `urban-road-v-${chunkX}-${chunkY}`, x: cx - 50, y: districtY + 40, w: 100, h: districtH - 80 },
+    { id: `urban-road-h-${chunkX}-${chunkY}`, x: districtX - 160, y: cy - 52, w: districtW + 320, h: 104 },
+    { id: `urban-road-v-${chunkX}-${chunkY}`, x: cx - 54, y: districtY - 150, w: 108, h: districtH + 300 },
   ];
   if (next() > 0.45) {
-    roads.push({ id: `urban-road-side-${chunkX}-${chunkY}`, x: districtX + districtW - 220, y: districtY + 75, w: 88, h: districtH - 150 });
+    roads.push({ id: `urban-road-side-${chunkX}-${chunkY}`, x: districtX + districtW - 230, y: districtY - 85, w: 94, h: districtH + 170 });
   }
 
   const structures = [

@@ -303,16 +303,20 @@ export function placeTopDownLilyPad(state, soundOn) {
     return false;
   }
 
-  if (!isInWater(state)) {
-    setNotice(state, "You can only place lily pads on water.");
+  const point = getPlacementPoint(state, 190);
+  const water = findWaterAtPoint(state, point.x, point.y) ?? findWaterAtPoint(state, state.frog.x, state.frog.y);
+  if (!water) {
+    setNotice(state, "Aim at water or stand in water to place a lily pad.");
     if (soundOn) beep(150, 0.04);
     return false;
   }
+  const placeX = clamp(point.x, water.x + 38, water.x + water.w - 38);
+  const placeY = clamp(point.y, water.y + 27, water.y + water.h - 27);
 
   const newPad = {
     id: `placed-top-pad-${Math.round(state.time * 1000)}-${state.placedLilyPads.length + 1}`,
-    x: state.frog.x,
-    y: state.frog.y,
+    x: placeX,
+    y: placeY,
     phase: Math.random() * Math.PI * 2,
     placed: true,
   };
@@ -383,6 +387,7 @@ function getActiveTopDown(state) {
       active.pickups.push(...chunk.pickups);
       active.roads.push(...(chunk.roads ?? []));
       active.parks.push(...(chunk.parks ?? []));
+      active.cars.push(...(chunk.cars ?? []).filter((item) => isVisible(item, minX, minY, maxX, maxY)));
       active.foliage.push(...(chunk.foliage ?? []));
     }
   }
@@ -887,18 +892,10 @@ export function placeTopDownMaterial(state, soundOn) {
   const isWater = material === "water";
   const w = isWater ? 104 : 68;
   const h = isWater ? 72 : 54;
-  const x = clamp(state.frog.x + state.frog.facing * PLACE_RANGE - w / 2, 20, state.worldSize - w - 20);
-  const y = clamp(state.frog.y - h / 2, 20, state.worldSize - h - 20);
-  const rect = { x, y, w, h };
-
-  if (!isWater && rectsOverlap(frogRect(state, 4), rect)) {
-    setNotice(state, "Step back before placing a solid block.");
-    if (soundOn) beep(150, 0.04);
-    return false;
-  }
-
-  if (!isWater && state.active.walls.some((wall) => rectsOverlap(rect, wall))) {
-    setNotice(state, "That block would overlap another wall.");
+  const point = getPlacementPoint(state, 180);
+  const rect = findMaterialPlacementRect(state, point, w, h, isWater);
+  if (!rect) {
+    setNotice(state, isWater ? "Aim at a nearby open spot to pour water." : "Aim at an open nearby spot for that block.");
     if (soundOn) beep(150, 0.04);
     return false;
   }
@@ -1104,16 +1101,42 @@ function drawCheckpoints(ctx, state) {
 }
 
 function drawGround(ctx, state) {
-  ctx.fillStyle = "#bfe7c0";
+  ctx.fillStyle = "#b7df9c";
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
-  const startX = -((state.cameraX * 0.35) % 140);
-  const startY = -((state.cameraY * 0.35) % 110);
-  for (let y = startY; y < VIEW_HEIGHT + 80; y += 110) {
-    for (let x = startX; x < VIEW_WIDTH + 80; x += 140) {
+  ctx.fillStyle = "rgba(244, 255, 218, 0.26)";
+  const softStartX = -((state.cameraX * 0.35) % 140);
+  const softStartY = -((state.cameraY * 0.35) % 110);
+  for (let y = softStartY; y < VIEW_HEIGHT + 80; y += 110) {
+    for (let x = softStartX; x < VIEW_WIDTH + 80; x += 140) {
       ctx.beginPath();
       ctx.ellipse(x, y, 38, 10, -0.15, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+  const startX = -((state.cameraX * 0.62) % 46);
+  const startY = -((state.cameraY * 0.62) % 38);
+  ctx.lineCap = "round";
+  for (let y = startY; y < VIEW_HEIGHT + 44; y += 38) {
+    for (let x = startX; x < VIEW_WIDTH + 46; x += 46) {
+      const worldX = state.cameraX + x;
+      const worldY = state.cameraY + y;
+      const sway = Math.sin(worldX * 0.037 + worldY * 0.021) * 4;
+      const height = 8 + Math.abs(Math.sin(worldX * 0.019 - worldY * 0.026)) * 7;
+      ctx.strokeStyle = "rgba(59, 128, 58, 0.32)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y + 7);
+      ctx.lineTo(x + sway, y + 7 - height);
+      ctx.moveTo(x + 8, y + 7);
+      ctx.lineTo(x + 8 + sway * 0.6, y + 1 - height * 0.72);
+      ctx.stroke();
+      if ((Math.floor(worldX + worldY) % 5) === 0) {
+        ctx.strokeStyle = "rgba(232, 248, 166, 0.38)";
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y + 6);
+        ctx.lineTo(x - 2, y - 3);
+        ctx.stroke();
+      }
     }
   }
 }
@@ -1725,6 +1748,56 @@ function resolveSelectedPlaceable(state) {
   return selected;
 }
 
+function getPlacementPoint(state, maxDistance = PLACE_RANGE) {
+  const pointer = state.pointer ?? {};
+  const hasPointer = Number.isFinite(pointer.x) && Number.isFinite(pointer.y);
+  if (hasPointer) {
+    const dx = pointer.x - state.frog.x;
+    const dy = pointer.y - state.frog.y;
+    if (dx * dx + dy * dy <= maxDistance * maxDistance) {
+      return {
+        x: clamp(pointer.x, 20, state.worldSize - 20),
+        y: clamp(pointer.y, 20, state.worldSize - 20),
+      };
+    }
+  }
+  return {
+    x: clamp(state.frog.x + state.frog.facing * PLACE_RANGE, 20, state.worldSize - 20),
+    y: clamp(state.frog.y, 20, state.worldSize - 20),
+  };
+}
+
+function findWaterAtPoint(state, x, y) {
+  return state.active.water.find((water) => (
+    x >= water.x &&
+    x <= water.x + water.w &&
+    y >= water.y &&
+    y <= water.y + water.h
+  )) ?? null;
+}
+
+function findMaterialPlacementRect(state, point, w, h, isWater) {
+  const offsets = [
+    [0, 0],
+    [state.frog.facing * (w + 12), 0],
+    [0, -(h + 12)],
+    [0, h + 12],
+    [-state.frog.facing * (w + 12), 0],
+  ];
+  for (const [dx, dy] of offsets) {
+    const rect = {
+      x: clamp(point.x + dx - w / 2, 20, state.worldSize - w - 20),
+      y: clamp(point.y + dy - h / 2, 20, state.worldSize - h - 20),
+      w,
+      h,
+    };
+    if (!isWater && rectsOverlap(frogRect(state, 4), rect)) continue;
+    if (state.active.walls.some((wall) => rectsOverlap(rect, wall))) continue;
+    return rect;
+  }
+  return null;
+}
+
 function addMaterial(state, material, amount) {
   if (!PLACEABLE_MATERIALS.includes(material)) return;
   state.materials[material] = (state.materials[material] ?? 0) + amount;
@@ -1764,8 +1837,18 @@ function makeUrbanFeatures() {
     { id: "east-park-water", x: pocketParks[1].x - 44, y: pocketParks[1].y - 48, w: pocketParks[1].w + 88, h: 58, urban: true, round: 18 },
     { id: "south-plaza-water", x: pocketParks[2].x + 34, y: pocketParks[2].y - 54, w: pocketParks[2].w - 68, h: 58, urban: true, round: 18 },
   ];
-  const roads = [];
-  const cars = [];
+  const roads = [
+    { id: "city-main-east-west", x: x - 260, y: cy - 76, w: TOP_DOWN_URBAN.w + 520, h: 152 },
+    { id: "city-main-north-south", x: cx - 76, y: y - 240, w: 152, h: TOP_DOWN_URBAN.h + 480 },
+    { id: "city-north-long-road", x: x - 180, y: y + 252, w: TOP_DOWN_URBAN.w + 360, h: 104 },
+    { id: "city-south-long-road", x: x - 180, y: y + TOP_DOWN_URBAN.h - 360, w: TOP_DOWN_URBAN.w + 360, h: 104 },
+    { id: "city-west-long-road", x: x + 335, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
+    { id: "city-east-long-road", x: x + TOP_DOWN_URBAN.w - 435, y: y - 150, w: 104, h: TOP_DOWN_URBAN.h + 300 },
+    { id: "city-crosswalk-park-east", kind: "crosswalk", x: park.x + park.w + 78, y: cy - 62, w: 72, h: 124 },
+    { id: "city-crosswalk-market", kind: "crosswalk", x: cx + 275, y: cy - 76, w: 84, h: 152 },
+    { id: "city-crosswalk-west", kind: "crosswalk", x: cx - 76, y: cy + 260, w: 152, h: 72 },
+  ];
+  const cars = makeUrbanTraffic(roads);
   const shops = [
     {
       id: "market-hall",
@@ -1777,7 +1860,7 @@ function makeUrbanFeatures() {
       w: 250,
       h: 150,
       fixed: true,
-      talk: "Press E to enter, clear a short parkour room, then buy upgrades, trade, and shop furniture.",
+      talk: "Press E to enter the wood market hall for upgrades, trades, and furniture.",
     },
     {
       id: "parkour-village-house",

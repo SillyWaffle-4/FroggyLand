@@ -629,6 +629,11 @@ canvas:focus-visible {
   background: #fff1cf;
 }
 
+.achievement-next {
+  color: #356342;
+  background: rgba(232, 246, 221, 0.88);
+}
+
 .play-shell .achievement-strip {
   position: absolute;
   z-index: 6;

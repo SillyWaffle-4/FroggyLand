@@ -49,14 +49,22 @@ const STARTING_PROGRESS = {
 
 const ACHIEVEMENTS = [
   { id: "tongue-snack", name: "Tongue Snack", test: (progress) => (progress.topDown?.score ?? 0) >= 12 },
+  { id: "fly-feast", name: "Fly Feast", test: (progress) => (progress.topDown?.score ?? 0) >= 40 },
   { id: "first-home", name: "First Home", test: (progress) => Boolean(progress.house) },
   { id: "timber", name: "Timber", test: (progress) => (progress.topDown?.materials?.wood ?? 0) > 0 || (progress.topDown?.choppedTrees?.length ?? 0) > 0 },
+  { id: "forest-frog", name: "Forest Frog", test: (progress) => (progress.topDown?.choppedTrees?.length ?? 0) >= 8 },
   { id: "water-miner", name: "Water Miner", test: (progress) => (progress.topDown?.materials?.water ?? 0) > 0 },
   { id: "bridge-builder", name: "Bridge Builder", test: (progress) => (progress.topDown?.placedMaterials?.length ?? 0) > 0 },
+  { id: "pond-maker", name: "Pond Maker", test: (progress) => (progress.topDown?.placedMaterials ?? []).some((item) => item.material === "water") },
+  { id: "lily-trail", name: "Lily Trail", test: (progress) => (progress.topDown?.placedLilyPads?.length ?? 0) >= 4 },
   { id: "parkour-part", name: "Parkour Part", test: (progress) => Object.values(progress.houseParts ?? {}).some((value) => value > 0) },
+  { id: "decorator", name: "Decorator", test: (progress) => Object.values(progress.placedInterior ?? {}).reduce((sum, value) => sum + value, 0) >= 4 },
   { id: "checkpoint-maker", name: "Checkpoint Maker", test: (progress) => (progress.topDown?.checkpoints?.length ?? 0) > 0 },
   { id: "swift-frog", name: "Swift Frog", test: (progress) => (progress.topDown?.speedUpgrade ?? 0) > 0 },
+  { id: "speedster", name: "Speedster", test: (progress) => (progress.topDown?.speedUpgrade ?? 0) >= 3 },
+  { id: "big-leaper", name: "Big Leaper", test: (progress) => (progress.topDown?.leapUpgrade ?? 0) >= 3 },
   { id: "buzz-boom", name: "Buzz Boom", test: (progress) => (progress.topDown?.spawnRateUpgrade ?? 0) > 0 },
+  { id: "shop-regular", name: "Shop Regular", test: (progress) => (progress.topDown?.pickaxeTier ?? 0) >= 1 && (progress.topDown?.speedUpgrade ?? 0) >= 1 },
   { id: "second-floor", name: "Second Floor", test: (progress) => (progress.house?.level ?? progress.topDown?.houseLevel ?? 0) >= 10 },
   { id: "full-house", name: "Full House", test: (progress) => (progress.house?.level ?? progress.topDown?.houseLevel ?? 0) >= 20 },
 ];
@@ -234,6 +242,7 @@ function App() {
 function AchievementStrip({ progress }) {
   const unlocked = ACHIEVEMENTS.filter((achievement) => progress.achievements?.[achievement.id]);
   const recent = unlocked.slice(-4);
+  const next = ACHIEVEMENTS.find((achievement) => !progress.achievements?.[achievement.id]);
   return (
     <section className="achievement-strip" aria-label="Achievements">
       <span className="achievement-total"><Trophy size={15} />{unlocked.length}/{ACHIEVEMENTS.length}</span>
@@ -242,6 +251,7 @@ function AchievementStrip({ progress }) {
       )) : (
         <span className="achievement-pill">No achievements yet</span>
       )}
+      {next && <span className="achievement-pill achievement-next">Next: {next.name}</span>}
     </section>
   );
 }
