@@ -93,6 +93,8 @@ export function createTopDownState(progress = {}) {
     chunks: new Map(),
     active: emptyActive(),
     nearbyPlaceId: null,
+    carSpawnTimer: 0,
+    spawnedCars: [],
     notice: "Top-down is now a 300k x 300k world. The middle city has shops, trades, and a water-ringed park.",
     noticeTimer: 4.4,
   };
@@ -133,6 +135,7 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
   state.hurtCooldown = Math.max(0, state.hurtCooldown - dt);
   state.pointer = { x: pointer.x, y: pointer.y };
   state.active = getActiveTopDown(state);
+  spawnOffroadCars(state);
 
   const onLilyPad = isOnLilyPad(state);
   if (onLilyPad) {
@@ -308,7 +311,6 @@ function getActiveTopDown(state) {
       active.pickups.push(...chunk.pickups);
       active.roads.push(...(chunk.roads ?? []));
       active.parks.push(...(chunk.parks ?? []));
-      active.cars.push(...(chunk.cars ?? []));
       active.foliage.push(...(chunk.foliage ?? []));
     }
   }
@@ -318,7 +320,6 @@ function getActiveTopDown(state) {
   active.roads.push(...URBAN_FEATURES.roads.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.parks.push(...URBAN_FEATURES.parks.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.cars.push(...URBAN_FEATURES.cars.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
-  active.water.push(...URBAN_FEATURES.water.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.lilyPads.push(...URBAN_FEATURES.lilyPads.filter((item) => isVisible({ x: item.x - 28, y: item.y - 18, w: 56, h: 36 }, minX, minY, maxX, maxY)));
   active.lilyPads.push(...state.placedLilyPads.filter((item) => isVisible({ x: item.x - 38, y: item.y - 26, w: 76, h: 52 }, minX, minY, maxX, maxY)));
   active.walls.push(...URBAN_FEATURES.walls.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
@@ -740,7 +741,6 @@ export function drawTopDownGame(ctx, state) {
   drawTopDownPickups(ctx, state);
   drawBird(ctx, state);
   drawFrog(ctx, state);
-  drawRoads(ctx, state);
   ctx.restore();
   drawDayNightOverlay(ctx, state);
 }
@@ -849,6 +849,47 @@ function drawDayNightOverlay(ctx, state) {
     ctx.fillStyle = "rgba(255, 210, 72, 0.08)";
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   }
+}
+
+function spawnOffroadCars(state) {
+  const SPAWN_INTERVAL = 30;
+  state.carSpawnTimer += 1 / 60;
+  
+  if (state.carSpawnTimer >= SPAWN_INTERVAL) {
+    state.carSpawnTimer = 0;
+    const carId = `offroad-car-${state.time.toString().replace(".", "-")}`;
+    const colors = ["#e65b4f", "#f5a962", "#2d7ab8", "#c76b3a", "#7b4b8a", "#4a9d6f"];
+    const spawnX = CENTER + (Math.random() - 0.5) * 2000;
+    const spawnY = CENTER + (Math.random() - 0.5) * 2000;
+    const isHorizontal = Math.random() > 0.5;
+    const car = {
+      id: carId,
+      name: "Offroad car",
+      x: spawnX,
+      y: spawnY,
+      w: isHorizontal ? 200 : 100,
+      h: isHorizontal ? 100 : 200,
+      carW: 82,
+      carH: 30,
+      speed: 120 + Math.random() * 80,
+      offset: Math.random(),
+      direction: Math.random() > 0.5 ? 1 : -1,
+      axis: isHorizontal ? "x" : "y",
+      color: colors[Math.floor(Math.random() * colors.length)],
+      stealsFlies: 5,
+      offroad: true,
+    };
+    state.spawnedCars.push(car);
+  }
+  
+  // Remove cars that are far away
+  state.spawnedCars = state.spawnedCars.filter((car) => {
+    const distToCam = Math.hypot(
+      (car.axis === "x" ? car.x : car.x + car.w / 2) - (state.cameraX + VIEW_WIDTH / 2),
+      (car.axis === "y" ? car.y : car.y + car.h / 2) - (state.cameraY + VIEW_HEIGHT / 2)
+    );
+    return distToCam < 3000;
+  });
 }
 
 function drawRoads(ctx, state) {
@@ -1275,17 +1316,8 @@ function makeUrbanFeatures() {
     { id: "east-park-water", x: pocketParks[1].x - 44, y: pocketParks[1].y - 48, w: pocketParks[1].w + 88, h: 58, urban: true, round: 18 },
     { id: "south-plaza-water", x: pocketParks[2].x + 34, y: pocketParks[2].y - 54, w: pocketParks[2].w - 68, h: 58, urban: true, round: 18 },
   ];
-  const roads = [
-    { id: "main-road-h", x: x + 130, y: cy - 70, w: TOP_DOWN_URBAN.w - 260, h: 140 },
-    { id: "main-road-v", x: cx - 78, y: y + 85, w: 156, h: TOP_DOWN_URBAN.h - 170 },
-    { id: "north-road-h", x: x + 260, y: cy - 490, w: TOP_DOWN_URBAN.w - 520, h: 104 },
-    { id: "south-road-h", x: x + 300, y: cy + 485, w: TOP_DOWN_URBAN.w - 600, h: 112 },
-    { id: "west-road-v", x: cx - 540, y: y + 210, w: 112, h: TOP_DOWN_URBAN.h - 420 },
-    { id: "east-road-v", x: cx + 440, y: y + 240, w: 116, h: TOP_DOWN_URBAN.h - 480 },
-    { id: "market-crosswalk", kind: "crosswalk", x: cx - 210, y: cy - 92, w: 420, h: 44 },
-    { id: "park-crosswalk", kind: "crosswalk", x: cx + 78, y: cy + 236, w: 44, h: 255 },
-  ];
-  const cars = makeUrbanTraffic(roads);
+  const roads = [];
+  const cars = [];
   const shops = [
     {
       id: "market-hall",
