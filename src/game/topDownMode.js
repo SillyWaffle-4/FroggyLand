@@ -729,7 +729,6 @@ export function drawTopDownGame(ctx, state) {
   ctx.save();
   ctx.scale(state.zoom, state.zoom);
   ctx.translate(-state.cameraX, -state.cameraY);
-  drawRoads(ctx, state);
   drawWater(ctx, state);
   drawParks(ctx, state);
   drawLilyPads(ctx, state);
@@ -741,6 +740,7 @@ export function drawTopDownGame(ctx, state) {
   drawTopDownPickups(ctx, state);
   drawBird(ctx, state);
   drawFrog(ctx, state);
+  drawRoads(ctx, state);
   ctx.restore();
   drawDayNightOverlay(ctx, state);
 }
@@ -890,7 +890,12 @@ function drawVehicles(ctx, state) {
     const rect = getTopDownVehicleRect(car, state.time);
     ctx.save();
     ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
-    if (car.axis === "y") ctx.rotate(Math.PI / 2);
+    if (car.axis === "y") {
+      ctx.rotate(Math.PI / 2);
+    }
+    if (car.direction === -1) {
+      ctx.rotate(Math.PI);
+    }
     ctx.fillStyle = "rgba(18, 26, 23, 0.25)";
     roundRect(ctx, -rect.w / 2 + 4, -rect.h / 2 + 8, rect.w - 8, rect.h, 9);
     ctx.fill();
@@ -901,7 +906,7 @@ function drawVehicles(ctx, state) {
     roundRect(ctx, -rect.w / 4, -rect.h / 2 + 5, rect.w / 2, 10, 4);
     ctx.fill();
     ctx.fillStyle = "#fff0a8";
-    const headlightX = car.direction === -1 ? -rect.w / 2 + 8 : rect.w / 2 - 14;
+    const headlightX = car.direction === -1 ? rect.w / 2 - 14 : -rect.w / 2 + 8;
     ctx.fillRect(headlightX, -rect.h / 2 + 5, 6, 8);
     ctx.fillRect(headlightX, rect.h / 2 - 13, 6, 8);
     ctx.restore();
@@ -1287,7 +1292,7 @@ function makeUrbanFeatures() {
       type: "marketHall",
       name: "Market Hall",
       kind: "market",
-      x: cx,
+      x: cx + 370,
       y: cy - 382,
       w: 250,
       h: 150,
