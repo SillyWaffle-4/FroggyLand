@@ -4,7 +4,6 @@ import { TOP_DOWN_CHUNK_SIZE, TOP_DOWN_URBAN, generateTopDownChunk } from "./pro
 import { clamp, lineCircleHit, rectsOverlap, roundRect } from "./utils.js";
 import frogSpriteUrl from "../../frog.png";
 import frogMartUrl from "../../frog-mart.png";
-import parkourHouseUrl from "../../parkour-house.png";
 
 const FROG_SIZE = 42;
 const MOVE_SPEED = 270;
@@ -34,7 +33,6 @@ const PLACEABLE_MATERIALS = ["wood", "clay", "stone", "crystal", "water"];
 const DEFAULT_MATERIALS = { wood: 0, clay: 0, stone: 0, crystal: 0, water: 0 };
 const FROG_SPRITE = makeImage(frogSpriteUrl);
 const FROG_MART_SPRITE = makeImage(frogMartUrl);
-const PARKOUR_HOUSE_SPRITE = makeImage(parkourHouseUrl);
 
 export const FURNITURE_SHOP_ITEMS = [
   { part: "window", name: "Round Window", cost: { pearls: 4 } },
@@ -1385,11 +1383,7 @@ function drawStructures(ctx, state) {
         drawShop(ctx, item, "#9d6cc7", "MK");
       }
     } else if (item.type === "parkourHouse") {
-      if (imageReady(PARKOUR_HOUSE_SPRITE)) {
-        drawStructureSprite(ctx, PARKOUR_HOUSE_SPRITE, item);
-      } else {
-        drawHousePortal(ctx, item, "#5fcb55", "PK");
-      }
+      drawHousePortal(ctx, item, "#5fcb55", "PK");
     } else if (item.type === "playerHouse") {
       drawHousePortal(ctx, item, "#ffdf5d", `L${item.level ?? 1}`);
     } else if (item.type === "urbanBuilding") {
@@ -1680,15 +1674,15 @@ function drawFrog(ctx, state) {
   ctx.save();
   ctx.translate(frog.x, frog.y - (leaping ? 16 : 0));
   ctx.scale(frog.facing, 1);
+  ctx.fillStyle = leaping ? "rgba(19, 36, 26, 0.2)" : "rgba(19, 36, 26, 0.14)";
+  ctx.beginPath();
+  ctx.ellipse(0, leaping ? 48 : 31, leaping ? 34 : 29, leaping ? 8 : 9, 0, 0, Math.PI * 2);
+  ctx.fill();
   if (imageReady(FROG_SPRITE)) {
-    ctx.drawImage(FROG_SPRITE, -26, -28, 52, 60);
+    ctx.drawImage(FROG_SPRITE, -31, -35, 62, 72);
     ctx.restore();
     return;
   }
-  ctx.fillStyle = leaping ? "rgba(255, 223, 93, 0.36)" : "rgba(19, 36, 26, 0.18)";
-  ctx.beginPath();
-  ctx.ellipse(0, leaping ? 32 : 18, leaping ? 36 : 28, leaping ? 10 : 8, 0, 0, Math.PI * 2);
-  ctx.fill();
   ctx.fillStyle = leaping ? "#84e45e" : isInWater(state) ? "#5bc88f" : "#5fcb55";
   ctx.beginPath();
   ctx.ellipse(0, 4, 30, 23, 0, 0, Math.PI * 2);

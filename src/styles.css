@@ -335,25 +335,17 @@ button {
 
 .menu-frog {
   position: absolute;
-  left: 180px;
-  bottom: 147px;
-  width: 88px;
-  height: 62px;
-  border-radius: 50%;
-  background: #62ce57;
-  box-shadow: 0 16px 0 rgba(18, 49, 34, 0.14);
+  left: 172px;
+  bottom: 132px;
+  width: 112px;
+  height: 132px;
+  background: url("../frog.png") center / contain no-repeat;
+  filter: drop-shadow(0 16px 0 rgba(18, 49, 34, 0.14));
 }
 
 .menu-frog::before,
 .menu-frog::after {
-  content: "";
-  position: absolute;
-  top: -15px;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: #f6ffe8;
-  box-shadow: inset 6px 0 0 #202820;
+  content: none;
 }
 
 .menu-frog::before {
@@ -365,13 +357,7 @@ button {
 }
 
 .menu-frog span {
-  position: absolute;
-  left: 35px;
-  bottom: 10px;
-  width: 28px;
-  height: 12px;
-  border-bottom: 4px solid #225333;
-  border-radius: 0 0 20px 20px;
+  display: none;
 }
 
 .menu-copy,
@@ -700,57 +686,79 @@ canvas:focus-visible {
   z-index: 5;
   top: 74px;
   left: 10px;
-  right: 10px;
-  max-height: calc(100vh - 84px);
+  right: auto;
+  width: min(430px, calc(100vw - 20px));
+  max-height: min(56vh, calc(100vh - 84px));
   display: grid;
-  grid-template-columns: minmax(150px, 210px) minmax(360px, 1fr) minmax(280px, 0.95fr) minmax(220px, 0.72fr);
+  grid-template-columns: 1fr;
   align-items: start;
-  gap: 8px;
-  padding: 8px;
+  gap: 6px;
+  padding: 7px;
   overflow: auto;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(12px);
 }
 
 .play-shell .achievement-strip ~ .game-layout .panel {
   top: 108px;
-  max-height: calc(100vh - 118px);
+  max-height: min(52vh, calc(100vh - 118px));
 }
 
 .play-shell.chrome-hidden .panel {
   top: 10px;
-  max-height: calc(100vh - 20px);
+  max-height: min(60vh, calc(100vh - 20px));
 }
 
 .play-shell .area-name {
-  padding: 9px 10px;
+  padding: 6px 8px;
+}
+
+.play-shell .area-name span,
+.play-shell .stat-grid span,
+.play-shell .inventory-grid span {
+  font-size: 0.58rem;
 }
 
 .play-shell .area-name strong {
-  font-size: 0.98rem;
+  margin-top: 2px;
+  font-size: 0.84rem;
 }
 
 .play-shell .stat-grid,
 .play-shell .inventory-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .play-shell .stat-grid div,
 .play-shell .inventory-grid div {
-  min-height: 48px;
-  padding: 7px;
+  min-height: 34px;
+  padding: 5px 5px 4px;
+  border-left-width: 3px;
 }
 
 .play-shell .stat-grid strong,
 .play-shell .inventory-grid strong {
-  margin-top: 4px;
-  font-size: 0.98rem;
+  margin-top: 2px;
+  font-size: 0.76rem;
 }
 
 .play-shell .notice {
-  min-height: 48px;
-  padding: 8px 10px;
+  min-height: 0;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  line-height: 1.22;
+}
+
+.play-shell .action-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.play-shell .panel-button {
+  min-height: 30px;
+  padding: 0 6px;
+  font-size: 0.72rem;
 }
 
 .play-shell .teleport-panel {
@@ -759,8 +767,24 @@ canvas:focus-visible {
 
 .play-shell .control-list {
   grid-column: 1 / -1;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 6px 10px;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.play-shell .control-list span {
+  flex: 0 0 auto;
+}
+
+.play-shell kbd {
+  min-width: 21px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 5px;
+  font-size: 0.66rem;
 }
 
 .panel {
@@ -1179,7 +1203,8 @@ kbd {
   }
 
   .menu-frog {
-    left: 72px;
+    left: 68px;
+    bottom: 130px;
   }
 
   .game-layout {

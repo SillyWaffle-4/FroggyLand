@@ -1007,9 +1007,13 @@ function drawFrog(ctx, frog, time) {
   ctx.save();
   ctx.translate(frog.x + FROG_WIDTH / 2, frog.y + FROG_HEIGHT / 2);
   ctx.scale(frog.facing, 1);
+  ctx.fillStyle = frog.grounded ? "rgba(19, 36, 26, 0.16)" : "rgba(19, 36, 26, 0.24)";
+  ctx.beginPath();
+  ctx.ellipse(0, FROG_HEIGHT / 2 + 8, frog.grounded ? 27 : 22, frog.grounded ? 7 : 5, 0, 0, Math.PI * 2);
+  ctx.fill();
   if (imageReady(FROG_SPRITE)) {
     const bob = frog.grounded ? Math.sin(time * 10) * 1.5 : 0;
-    ctx.drawImage(FROG_SPRITE, -FROG_WIDTH / 2, -FROG_HEIGHT / 2 + bob, FROG_WIDTH, FROG_HEIGHT + 8);
+    ctx.drawImage(FROG_SPRITE, -FROG_WIDTH * 0.6, -FROG_HEIGHT * 0.72 + bob, FROG_WIDTH * 1.2, (FROG_HEIGHT + 8) * 1.2);
     ctx.restore();
     return;
   }
