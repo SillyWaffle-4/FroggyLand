@@ -78,6 +78,7 @@ export function createTopDownState(progress = {}) {
     amber: saved.amber ?? 3,
     materials,
     selectedPlaceable: PLACEABLE_MATERIALS.includes(saved.selectedPlaceable) ? saved.selectedPlaceable : firstAvailableMaterial(materials),
+    completedParkourRewards: new Set(Object.entries(progress.rewards ?? {}).filter(([, unlocked]) => unlocked).map(([id]) => id)),
     placedMaterials: (saved.placedMaterials ?? []).map((item, index) => ({
       id: item.id ?? `placed-material-${index + 1}`,
       material: item.material ?? "wood",
@@ -738,6 +739,11 @@ export function interactTopDownPlace(state, soundOn) {
   }
 
   if (place.kind === "parkour") {
+    if (state.completedParkourRewards.has(parkourRewardId(place.id))) {
+      setNotice(state, "You already cleared this parkour house. Find a new one for another reward.", 2.8);
+      if (soundOn) beep(180, 0.04);
+      return false;
+    }
     state.parkourEntryPoint = { x: state.frog.x, y: state.frog.y };
     setNotice(state, "Entering a short platformer parkour house. Clear it to earn a part.", 2);
     if (soundOn) beep(900, 0.06);
@@ -1745,6 +1751,10 @@ function normalizeMaterials(materials = {}) {
 function firstAvailableMaterial(materials, preferred = null) {
   if (preferred && (materials[preferred] ?? 0) > 0) return preferred;
   return PLACEABLE_MATERIALS.find((material) => (materials[material] ?? 0) > 0) ?? "wood";
+}
+
+function parkourRewardId(placeId) {
+  return `parkour-${placeId || "village"}`;
 }
 
 function resolveSelectedPlaceable(state) {

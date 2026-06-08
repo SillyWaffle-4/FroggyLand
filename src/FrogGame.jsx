@@ -32,6 +32,7 @@ const HOUSE_CRAFT_ITEMS = [
 
 const PARKOUR_GOAL_X = 1500;
 const SHOP_GOAL_X = 1500;
+const PARKOUR_TIME_LIMIT = 90;
 
 const EMPTY_PROGRESS = {
   houseParts: {},
@@ -62,8 +63,16 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
   if (!stateRef.current) {
     stateRef.current = createInitialState({ section: platformerSection, topDownUpgrades: progress.topDown });
     if (isParkourEntry) {
-      stateRef.current.notice = `Parkour House: ${platformerSection.name} is a short room. Reach the red END checkpoint for a reward.`;
-      stateRef.current.noticeTimer = 4;
+      const reward = getParkourReward(entry);
+      stateRef.current.parkourTimeRemaining = PARKOUR_TIME_LIMIT;
+      if (progress.rewards?.[reward.id]) {
+        stateRef.current.forceTopDownReturn = true;
+        stateRef.current.notice = "This parkour house is already cleared. Returning to top-down.";
+        stateRef.current.noticeTimer = 2;
+      } else {
+        stateRef.current.notice = `Parkour House: ${platformerSection.name} is a short room. Reach the red END checkpoint before time runs out.`;
+        stateRef.current.noticeTimer = 4;
+      }
     } else if (isShopEntry) {
       stateRef.current.shopUnlocked = true;
       stateRef.current.notice = "Market Hall: talk to traders for upgrades. No flies or gems spawn here.";
@@ -168,6 +177,14 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
       lastFrame = now;
       updateGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
       if (isParkourEntry) {
+        if (!stateRef.current.sectionComplete && !stateRef.current.forceTopDownReturn) {
+          stateRef.current.parkourTimeRemaining = Math.max(0, (stateRef.current.parkourTimeRemaining ?? PARKOUR_TIME_LIMIT) - dt);
+          if (stateRef.current.parkourTimeRemaining <= 0) {
+            stateRef.current.forceTopDownReturn = true;
+            stateRef.current.notice = "Time ran out. Returning to top-down.";
+            stateRef.current.noticeTimer = 2;
+          }
+        }
         grantParkourReward(stateRef.current, entry, progressRef.current, onProgressChange);
       } else if (isShopEntry) {
         unlockMarketCounter(stateRef.current);
@@ -353,6 +370,12 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
               <strong>{hud.partTotal}</strong>
             </div>
           )}
+          {hud.parkourTimer && (
+            <div>
+              <span>Timer</span>
+              <strong>{hud.parkourTimer}</strong>
+            </div>
+          )}
         </div>
         {(hud.canTrade || hud.canPlace || hud.canReturnTopDown || hud.marketAction || hud.isHouseEntry) && (
           <div className="action-grid">
@@ -461,6 +484,7 @@ function makeHud(state, entry = "openMap", progress = EMPTY_PROGRESS) {
     tutorialComplete: state.tutorialComplete,
     tongueRange: state.tongueRangeBonus > 0 ? `+${state.tongueRangeBonus}` : "Base",
     partTotal,
+    parkourTimer: isParkourEntry ? formatSeconds(state.parkourTimeRemaining ?? PARKOUR_TIME_LIMIT) : null,
     notice: state.notice,
   };
 }
@@ -495,6 +519,10 @@ function unlockMarketCounter(state) {
 
 function platformerObjectiveReached(state, fallbackX) {
   return state.section ? state.sectionComplete : state.frog.x >= fallbackX;
+}
+
+function formatSeconds(seconds) {
+  return `${Math.ceil(Math.max(0, seconds))}s`;
 }
 
 function bankPlatformerLoot(state, onProgressChange) {
