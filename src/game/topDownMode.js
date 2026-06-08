@@ -1918,16 +1918,18 @@ function makeUrbanFeatures() {
     { id: "city-block-g", type: "urbanBuilding", x: cx - 500, y: cy + 375, w: 175, h: 150, fixed: true, color: "#6f7d8f" },
     { id: "city-block-h", type: "urbanBuilding", x: cx + 390, y: cy + 520, w: 160, h: 132, fixed: true, color: "#7d8490" },
   ];
-  const walls = buildings.map((item) => ({
-    id: `${item.id}-wall`,
-    x: item.x - item.w / 2,
-    y: item.y - item.h / 2,
-    w: item.w,
-    h: item.h,
-    color: item.color,
-    material: "concrete",
-    mineable: false,
-  }));
+  const walls = buildings
+    .filter((item) => Math.abs(item.x - cx) > 680 || Math.abs(item.y - cy) > 430)
+    .map((item) => ({
+      id: `${item.id}-wall`,
+      x: item.x - item.w / 2,
+      y: item.y - item.h / 2,
+      w: item.w,
+      h: item.h,
+      color: item.color,
+      material: "concrete",
+      mineable: false,
+    }));
   const lilyPads = [
     { id: "park-pad-north", x: park.x + 130, y: park.y - 34, phase: 0.2 },
     { id: "park-pad-east", x: park.x + park.w + 34, y: park.y + 116, phase: 1.4 },
