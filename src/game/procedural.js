@@ -86,36 +86,6 @@ function chooseCityColor(next) {
   return colors[Math.floor(next() * colors.length)];
 }
 
-function mergeRects(rects, margin = 18) {
-  const merged = rects.map((rect) => ({ ...rect }));
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let i = 0; i < merged.length; i += 1) {
-      for (let j = i + 1; j < merged.length; j += 1) {
-        if (!rectsTouch(merged[i], merged[j], margin)) continue;
-        const minX = Math.min(merged[i].x, merged[j].x);
-        const minY = Math.min(merged[i].y, merged[j].y);
-        const maxX = Math.max(merged[i].x + merged[i].w, merged[j].x + merged[j].w);
-        const maxY = Math.max(merged[i].y + merged[i].h, merged[j].y + merged[j].h);
-        merged[i] = {
-          ...merged[i],
-          id: `${merged[i].id}+${merged[j].id}`,
-          x: minX,
-          y: minY,
-          w: maxX - minX,
-          h: maxY - minY,
-        };
-        merged.splice(j, 1);
-        changed = true;
-        break;
-      }
-      if (changed) break;
-    }
-  }
-  return merged;
-}
-
 // Determine biome density for a chunk
 function getBiomeDensity(chunkX, chunkY, seed) {
   const noise = simpleNoise2D(chunkX * 0.3, chunkY * 0.3, seed + 42);
@@ -337,7 +307,7 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
   return {
     key: `${chunkX}:${chunkY}`,
     walls,
-    water: mergeRects(water),
+    water,
     lilyPads,
     structures,
     pickups,
@@ -351,8 +321,9 @@ function ensureWaterCoverage(water, lilyPads, chunkRect, next, chunkX, chunkY) {
   let area = estimatedWaterArea(water, chunkRect);
   let attempts = 0;
   while (area < targetArea && attempts < 16) {
-    const w = 420 + Math.floor(next() * 520);
-    const h = 320 + Math.floor(next() * 440);
+    const horizontal = next() > 0.38;
+    const w = horizontal ? 560 + Math.floor(next() * 470) : 300 + Math.floor(next() * 310);
+    const h = horizontal ? 240 + Math.floor(next() * 330) : 500 + Math.floor(next() * 420);
     const pond = {
       id: `coverage-water-${chunkX}-${chunkY}-${attempts}`,
       type: "water",
@@ -361,6 +332,8 @@ function ensureWaterCoverage(water, lilyPads, chunkRect, next, chunkX, chunkY) {
       w,
       h,
       murky: next() > 0.55,
+      organic: true,
+      skew: next() > 0.5 ? "left" : "right",
     };
     water.push(pond);
     lilyPads.push({

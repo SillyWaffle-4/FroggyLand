@@ -415,8 +415,6 @@ function getActiveTopDown(state) {
   }
 
   active.water.push(...URBAN_FEATURES.water.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
-  active.water = mergeWaterRects(active.water);
-
   active.roads.push(...URBAN_FEATURES.roads.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.parks.push(...URBAN_FEATURES.parks.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
   active.cars.push(...URBAN_FEATURES.cars.filter((item) => isVisible(item, minX, minY, maxX, maxY)));
@@ -455,45 +453,6 @@ function viewportWidth(state) {
 
 function viewportHeight(state) {
   return VIEW_HEIGHT / state.zoom;
-}
-
-function waterRectsTouch(a, b, margin = 16) {
-  return (
-    a.x < b.x + b.w + margin &&
-    a.x + a.w + margin > b.x &&
-    a.y < b.y + b.h + margin &&
-    a.y + a.h + margin > b.y
-  );
-}
-
-function mergeWaterRects(water) {
-  const merged = water.map((item) => ({ ...item }));
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let i = 0; i < merged.length; i += 1) {
-      for (let j = i + 1; j < merged.length; j += 1) {
-        if (!waterRectsTouch(merged[i], merged[j])) continue;
-        const minX = Math.min(merged[i].x, merged[j].x);
-        const minY = Math.min(merged[i].y, merged[j].y);
-        const maxX = Math.max(merged[i].x + merged[i].w, merged[j].x + merged[j].w);
-        const maxY = Math.max(merged[i].y + merged[i].h, merged[j].y + merged[j].h);
-        merged[i] = {
-          ...merged[i],
-          id: `${merged[i].id}+${merged[j].id}`,
-          x: minX,
-          y: minY,
-          w: maxX - minX,
-          h: maxY - minY,
-        };
-        merged.splice(j, 1);
-        changed = true;
-        break;
-      }
-      if (changed) break;
-    }
-  }
-  return merged;
 }
 
 function frogRect(state, padding = 0) {
@@ -1327,12 +1286,52 @@ function getTopDownVehicleRect(car, time) {
 function drawWater(ctx, state) {
   for (const water of state.active.water) {
     ctx.fillStyle = water.urban ? "#229ab2" : "#2d9eb4";
-    roundRect(ctx, water.x, water.y, water.w, water.h, water.round ?? 16);
+    drawOrganicWaterShape(ctx, water);
     ctx.fill();
     ctx.strokeStyle = "rgba(225, 252, 255, 0.48)";
     ctx.lineWidth = 3;
     ctx.stroke();
   }
+}
+
+function drawOrganicWaterShape(ctx, water) {
+  if (water.urban || water.placed || water.w < 90 || water.h < 70) {
+    roundRect(ctx, water.x, water.y, water.w, water.h, water.round ?? 16);
+    return;
+  }
+
+  const seed = hashId(water.id ?? `${water.x}:${water.y}:${water.w}:${water.h}`);
+  const wobbleX = Math.min(58, water.w * 0.11);
+  const wobbleY = Math.min(48, water.h * 0.13);
+  const notch = ((seed >> 4) % 100) / 100;
+  const topLift = wobbleY * (0.38 + notch * 0.5);
+  const rightPush = wobbleX * (0.45 + ((seed >> 9) % 100) / 170);
+  const bottomDrop = wobbleY * (0.45 + ((seed >> 13) % 100) / 150);
+  const leftPull = wobbleX * (0.42 + ((seed >> 17) % 100) / 160);
+
+  const x = water.x;
+  const y = water.y;
+  const w = water.w;
+  const h = water.h;
+  ctx.beginPath();
+  ctx.moveTo(x + w * 0.18, y + topLift);
+  ctx.quadraticCurveTo(x + w * 0.38, y - wobbleY * 0.4, x + w * 0.58, y + topLift * 0.42);
+  ctx.quadraticCurveTo(x + w * 0.82, y + wobbleY * 0.1, x + w - rightPush * 0.38, y + h * 0.22);
+  ctx.quadraticCurveTo(x + w + rightPush, y + h * 0.46, x + w - rightPush * 0.18, y + h * 0.67);
+  ctx.quadraticCurveTo(x + w * 0.82, y + h + bottomDrop * 0.45, x + w * 0.58, y + h - bottomDrop * 0.24);
+  ctx.quadraticCurveTo(x + w * 0.34, y + h + bottomDrop, x + w * 0.15, y + h - bottomDrop * 0.38);
+  ctx.quadraticCurveTo(x - leftPull, y + h * 0.63, x + leftPull * 0.26, y + h * 0.42);
+  ctx.quadraticCurveTo(x - leftPull * 0.32, y + h * 0.19, x + w * 0.18, y + topLift);
+  ctx.closePath();
+}
+
+function hashId(id) {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 function drawParks(ctx, state) {
@@ -2068,19 +2067,40 @@ function makeRoadsideWater(roads) {
   for (const road of roads) {
     if (road.kind === "crosswalk") continue;
     const horizontal = road.w >= road.h;
+    const seed = hashId(road.id);
     if (horizontal) {
-      canals.push(
-        { id: `${road.id}-canal-north`, x: road.x + 42, y: road.y - 54, w: road.w - 84, h: 38, urban: true, round: 12 },
-        { id: `${road.id}-canal-south`, x: road.x + 42, y: road.y + road.h + 16, w: road.w - 84, h: 38, urban: true, round: 12 },
-      );
+      canals.push(...makeCanalSegments(`${road.id}-canal-north`, road.x + 42, road.y - 54, road.w - 84, 38, "x", seed));
+      canals.push(...makeCanalSegments(`${road.id}-canal-south`, road.x + 118, road.y + road.h + 16, road.w - 160, 38, "x", seed >> 3));
     } else {
-      canals.push(
-        { id: `${road.id}-canal-west`, x: road.x - 52, y: road.y + 44, w: 36, h: road.h - 88, urban: true, round: 12 },
-        { id: `${road.id}-canal-east`, x: road.x + road.w + 16, y: road.y + 44, w: 36, h: road.h - 88, urban: true, round: 12 },
-      );
+      canals.push(...makeCanalSegments(`${road.id}-canal-west`, road.x - 52, road.y + 44, 36, road.h - 88, "y", seed));
+      canals.push(...makeCanalSegments(`${road.id}-canal-east`, road.x + road.w + 16, road.y + 120, 36, road.h - 164, "y", seed >> 3));
     }
   }
   return canals;
+}
+
+function makeCanalSegments(id, x, y, w, h, axis, seed) {
+  const segments = [];
+  const length = axis === "x" ? w : h;
+  let cursor = 0;
+  let index = 0;
+  while (cursor < length - 90) {
+    const local = (seed + index * 97) >>> 0;
+    const segmentLength = Math.min(length - cursor, 190 + (local % 190));
+    const gap = 86 + ((local >> 8) % 74);
+    segments.push({
+      id: `${id}-${index}`,
+      x: axis === "x" ? x + cursor : x,
+      y: axis === "x" ? y : y + cursor,
+      w: axis === "x" ? segmentLength : w,
+      h: axis === "x" ? h : segmentLength,
+      urban: true,
+      round: 12,
+    });
+    cursor += segmentLength + gap;
+    index += 1;
+  }
+  return segments;
 }
 
 function structureName(type) {
