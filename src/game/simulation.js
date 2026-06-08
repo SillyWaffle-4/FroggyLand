@@ -45,6 +45,7 @@ function makeFly(point, ageOffset = 0) {
 
 export function createInitialState(options = {}) {
   const section = options.section ?? null;
+  const upgrades = options.topDownUpgrades ?? {};
   const spawn = section
     ? { x: section.spawnX, y: section.spawnY }
     : WORLD.spawn;
@@ -60,6 +61,8 @@ export function createInitialState(options = {}) {
     score: 0,
     pearls: 0,
     amber: 0,
+    speedUpgrade: upgrades.speedUpgrade ?? 0,
+    spawnRateUpgrade: upgrades.spawnRateUpgrade ?? 0,
     lilyPads: 0,
     tongueRangeBonus: 0,
     purchasedUpgrades: new Set(),
@@ -89,7 +92,7 @@ export function createInitialState(options = {}) {
       inWater: false,
       jumpHeld: false,
     },
-    flies: starterPoints.map((point, index) => makeFly(point, index * 0.25)),
+    flies: section?.noFlies ? [] : starterPoints.map((point, index) => makeFly(point, index * 0.25)),
     tongueCooldown: 0,
     tongue: {
       active: false,
@@ -107,6 +110,10 @@ export function createInitialState(options = {}) {
 }
 
 export function getActiveWorld(cameraX, frogX = cameraX, section = null) {
+  if (section?.customWorld) {
+    return getActiveCustomWorld(cameraX, frogX, section);
+  }
+
   const minX = Math.min(cameraX, frogX) - ACTIVE_MARGIN;
   const maxX = Math.max(cameraX + VIEW_WIDTH, frogX) + ACTIVE_MARGIN;
   const active = {
@@ -126,6 +133,53 @@ export function getActiveWorld(cameraX, frogX = cameraX, section = null) {
     structures: getItemsInRange(WORLD.spatial.structures, minX, maxX),
   };
   if (section?.endCheckpoint && section.endCheckpoint.x >= minX && section.endCheckpoint.x <= maxX) {
+    active.checkpoints = [
+      section.endCheckpoint,
+      ...active.checkpoints.filter((checkpoint) => checkpoint.id !== section.endCheckpoint.id),
+    ];
+  }
+  if (section?.noNpcs) {
+    active.npcs = [];
+  }
+  if (section?.noFlies) {
+    active.flySpawnPoints = [];
+    active.pearls = [];
+    active.amberCoins = [];
+    active.relics = [];
+  }
+  return active;
+}
+
+function getActiveCustomWorld(cameraX, frogX, section) {
+  const minX = Math.min(cameraX, frogX) - ACTIVE_MARGIN;
+  const maxX = Math.max(cameraX + VIEW_WIDTH, frogX) + ACTIVE_MARGIN;
+  const custom = section.customWorld;
+  const byRange = (items = []) => items.filter((item) => {
+    const x = item.x ?? 0;
+    const w = item.w ?? 0;
+    return x + w >= minX && x <= maxX;
+  });
+  const byPoint = (items = []) => items.filter((item) => {
+    const x = item.x ?? 0;
+    return x >= minX && x <= maxX;
+  });
+  const active = {
+    platforms: byRange(custom.platforms),
+    waterZones: byRange(custom.waterZones),
+    lilypads: byRange(custom.lilypads),
+    npcs: byPoint(custom.npcs),
+    flySpawnPoints: section.noFlies ? [] : byPoint(custom.flySpawnPoints),
+    relics: section.noFlies ? [] : byPoint(custom.relics),
+    pearls: section.noFlies ? [] : byPoint(custom.pearls),
+    amberCoins: section.noFlies ? [] : byPoint(custom.amberCoins),
+    cars: byRange(custom.cars),
+    messages: byPoint(custom.messages),
+    checkpoints: byPoint(custom.checkpoints),
+    caveZones: byRange(custom.caveZones),
+    decorations: byPoint(custom.decorations),
+    structures: byRange(custom.structures),
+  };
+  if (section.endCheckpoint && section.endCheckpoint.x >= minX && section.endCheckpoint.x <= maxX) {
     active.checkpoints = [
       section.endCheckpoint,
       ...active.checkpoints.filter((checkpoint) => checkpoint.id !== section.endCheckpoint.id),
@@ -168,7 +222,8 @@ export function updateGame(state, pressed, pointer, dt, soundOn) {
   if (wantsLeft === wantsRight) {
     frog.vx *= Math.pow(0.001, dt);
   } else {
-    frog.vx = wantsLeft ? -MOVE_SPEED : MOVE_SPEED;
+    const speedMultiplier = 1 + Math.min(10, state.speedUpgrade ?? 0) * 0.045;
+    frog.vx = (wantsLeft ? -MOVE_SPEED : MOVE_SPEED) * speedMultiplier;
     frog.facing = wantsLeft ? -1 : 1;
   }
 
@@ -381,6 +436,11 @@ export function placeLilyPad(state, pointer, soundOn) {
 }
 
 function updateFlies(state, dt) {
+  if (state.section?.noFlies) {
+    state.flies.length = 0;
+    return;
+  }
+
   const tongueFlyId = state.tongue.caughtFlyId;
   const minAnchorX = Math.min(state.cameraX, state.frog.x) - FLY_DESPAWN_MARGIN;
   const maxAnchorX = Math.max(state.cameraX + VIEW_WIDTH, state.frog.x) + FLY_DESPAWN_MARGIN;
@@ -405,7 +465,8 @@ function updateFlies(state, dt) {
   )).length;
 
   if (!localSpawnPoints.length || state.flies.length >= MAX_ACTIVE_FLIES || localFlyCount >= MIN_LOCAL_FLIES + 1) {
-    state.flySpawnCooldown = Math.min(state.flySpawnCooldown, FLY_REFILL_INTERVAL);
+    const refillInterval = getFlyRefillInterval(state);
+    state.flySpawnCooldown = Math.min(state.flySpawnCooldown, refillInterval);
     return;
   }
 
@@ -423,9 +484,14 @@ function updateFlies(state, dt) {
   if (point) {
     state.flies.push(makeFly(point));
   }
-  state.flySpawnCooldown = localFlyCount < MIN_LOCAL_FLIES
-    ? FLY_REFILL_INTERVAL
-    : 2.4 + Math.random() * 1.8;
+  const refillInterval = getFlyRefillInterval(state);
+  state.flySpawnCooldown = localFlyCount < MIN_LOCAL_FLIES + Math.floor((state.spawnRateUpgrade ?? 0) / 3)
+    ? refillInterval
+    : Math.max(0.45, 2.4 + Math.random() * 1.8 - (state.spawnRateUpgrade ?? 0) * 0.18);
+}
+
+function getFlyRefillInterval(state) {
+  return Math.max(0.42, FLY_REFILL_INTERVAL - (state.spawnRateUpgrade ?? 0) * 0.08);
 }
 
 function updateCheckpoint(state, soundOn) {

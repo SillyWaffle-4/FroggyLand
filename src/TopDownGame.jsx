@@ -7,6 +7,7 @@ import {
   LILY_PAD_COST,
   buildTopDownCheckpoint,
   buildTopDownHouse,
+  chopNearbyTree,
   createTopDownState,
   drawTopDownGame,
   findNearbyMineableWall,
@@ -17,6 +18,8 @@ import {
   makeTopDownProgress,
   mineNearbyWall,
   placeTopDownLilyPad,
+  placeTopDownMaterial,
+  cycleTopDownPlaceable,
   toggleTopDownTeleportMap,
   teleportToTopDownCheckpoint,
   updateTopDownGame,
@@ -119,6 +122,33 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
         }
         return;
       }
+      if (event.code === "KeyX") {
+        event.preventDefault();
+        if (!event.repeat) {
+          chopNearbyTree(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyC") {
+        event.preventDefault();
+        if (!event.repeat) {
+          cycleTopDownPlaceable(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
+      if (event.code === "KeyV") {
+        event.preventDefault();
+        if (!event.repeat) {
+          placeTopDownMaterial(stateRef.current, soundOnRef.current);
+          syncTopDownProgress();
+          setHud(makeTopDownHud(stateRef.current));
+        }
+        return;
+      }
       if ([...keys.left, ...keys.right, ...keys.jump, "KeyS", "ArrowDown"].includes(event.code)) {
         event.preventDefault();
         pressedRef.current.add(event.code);
@@ -172,6 +202,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
       last = now;
       lastFrame = now;
       updateTopDownGame(stateRef.current, pressedRef.current, pointerRef.current, dt, soundOnRef.current);
+      
       drawTopDownGame(context, stateRef.current);
 
       hudTimer += dt;
@@ -244,16 +275,23 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
           <div><span>Flies</span><strong>{hud.score}</strong></div>
           <div><span>Pearls</span><strong>{hud.pearls}</strong></div>
           <div><span>Amber</span><strong>{hud.amber}</strong></div>
+          <div><span>Wood</span><strong>{hud.wood}</strong></div>
+          <div><span>Water</span><strong>{hud.waterBlocks}</strong></div>
+          <div><span>Blocks</span><strong>{hud.blockTotal}</strong></div>
           <div><span>Found</span><strong>{hud.discovered}</strong></div>
           <div><span>Leap</span><strong>{hud.leapReady}</strong></div>
+          <div><span>Speed</span><strong>{hud.speedLevel}</strong></div>
+          <div><span>Spawn</span><strong>{hud.spawnLevel}</strong></div>
           <div><span>Pickaxe</span><strong>{hud.pickaxeName}</strong></div>
+          <div><span>Place</span><strong>{hud.selectedPlaceable}</strong></div>
+          <div><span>House</span><strong>{hud.houseLevel}</strong></div>
           <div><span>Checkpoint</span><strong>{hud.checkpointLabel}</strong></div>
           <div><span>Pads</span><strong>{hud.placedPads}</strong></div>
           <div><span>Cycle</span><strong>{hud.dayLabel}</strong></div>
           <div><span>Bird</span><strong>{hud.birdLabel}</strong></div>
           <div><span>Map</span><strong>{hud.mapSize}</strong></div>
         </div>
-        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint || hud.canBuildHouse || hud.canPlaceLilyPad) && (
+        {(hud.canInteract || hud.canMine || hud.canTeleport || hud.canBuildCheckpoint || hud.canBuildHouse || hud.canPlaceLilyPad || hud.canPlaceMaterial) && (
           <div className="action-grid">
             {hud.canInteract && (
               <button
@@ -270,11 +308,38 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
                 className="panel-button"
                 onClick={() => {
                   mineNearbyWall(stateRef.current, soundOnRef.current);
+                  syncTopDownProgress();
                   setHud(makeTopDownHud(stateRef.current));
                 }}
               >
-                Mine Wall
+                Mine
               </button>
+            )}
+            {hud.canPlaceMaterial && (
+              <>
+                <button
+                  type="button"
+                  className="panel-button"
+                  onClick={() => {
+                    cycleTopDownPlaceable(stateRef.current, soundOnRef.current);
+                    syncTopDownProgress();
+                    setHud(makeTopDownHud(stateRef.current));
+                  }}
+                >
+                  Select {hud.selectedPlaceable}
+                </button>
+                <button
+                  type="button"
+                  className="panel-button"
+                  onClick={() => {
+                    placeTopDownMaterial(stateRef.current, soundOnRef.current);
+                    syncTopDownProgress();
+                    setHud(makeTopDownHud(stateRef.current));
+                  }}
+                >
+                  Place {hud.selectedPlaceable}
+                </button>
+              </>
             )}
             {hud.canBuildCheckpoint && (
               <button
@@ -368,13 +433,17 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
         <p className="notice">{hud.notice}</p>
         <div className="control-list" aria-label="Top-down controls">
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span>
+          <span><kbd>Click</kbd> Tongue</span>
           <span><kbd>Space</kbd> Lily leap</span>
           {hud.canInteract && <span><kbd>E</kbd> Shop</span>}
           <span><kbd>B</kbd> Build checkpoint</span>
           <span><kbd>T</kbd> Checkpoint map</span>
           <span><kbd>L</kbd> Place lily pad</span>
+          <span><kbd>C</kbd> Select resource</span>
+          <span><kbd>V</kbd> Place resource</span>
           {!hud.hasHouse && <span><kbd>H</kbd> Build house</span>}
           <span><kbd>M</kbd> Mine</span>
+          <span><kbd>X</kbd> Chop nearby tree</span>
         </div>
       </aside>
     </section>
@@ -386,14 +455,24 @@ function makeTopDownHud(state) {
   const pickaxe = getCurrentPickaxe(state);
   const dayInfo = getDayInfo(state);
   const nextFurniture = FURNITURE_SHOP_ITEMS[state.furnitureShopIndex % FURNITURE_SHOP_ITEMS.length];
+  const materials = state.materials ?? {};
+  const blockTotal = (materials.clay ?? 0) + (materials.stone ?? 0) + (materials.crystal ?? 0);
+  const selectedCount = materials[state.selectedPlaceable] ?? 0;
   return {
     score: state.score,
     pearls: state.pearls,
     amber: state.amber,
+    wood: materials.wood ?? 0,
+    waterBlocks: materials.water ?? 0,
+    blockTotal,
     discovered: state.discoveredStructures.size,
     mapSize: `${Math.round(state.worldSize / 1000)}k x ${Math.round(state.worldSize / 1000)}k`,
     leapReady: state.leapTimer > 0 ? "Jumping" : state.lilyBoostTimer > 0 ? "Ready" : `Lv ${state.leapUpgrade}`,
-    pickaxeName: pickaxe.tier > 0 ? pickaxe.material : "None",
+    speedLevel: `Lv ${state.speedUpgrade ?? 0}`,
+    spawnLevel: `Lv ${state.spawnRateUpgrade ?? 0}`,
+    pickaxeName: pickaxe.tier > 0 ? pickaxe.name : "None",
+    selectedPlaceable: `${state.selectedPlaceable ?? "wood"} ${selectedCount}`,
+    houseLevel: state.houseLevel ? `Lv ${state.houseLevel}` : "None",
     checkpointLabel: state.checkpoints.length ? `${state.checkpoints.length}` : `${CHECKPOINT_COST.pearls}P ${CHECKPOINT_COST.amber}A`,
     hasCheckpoint: state.checkpoints.length > 0,
     checkpoints: state.checkpoints.map((checkpoint, index) => ({
@@ -413,6 +492,7 @@ function makeTopDownHud(state) {
     canInteract: Boolean(nearbyPlace),
     nearbyPlaceName: nearbyPlace?.kind === "furniture" ? `${nearbyPlace.name} (${nextFurniture.name})` : nearbyPlace?.name ?? "Shop",
     canMine: Boolean(findNearbyMineableWall(state)),
+    canPlaceMaterial: Object.values(materials).some((value) => value > 0),
     canBuildCheckpoint: state.pearls >= CHECKPOINT_COST.pearls && state.amber >= CHECKPOINT_COST.amber,
     canTeleport: state.checkpoints.length > 0,
     canPlaceLilyPad: state.score >= LILY_PAD_COST.flies,

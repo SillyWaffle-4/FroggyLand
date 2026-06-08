@@ -226,16 +226,16 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     }
   }
 
-  // Density-based standalone pool generation
-  const waterCountMap = { sparse: 1.5, normal: 2.5, dense: 4.2 };
-  const waterCount = Math.floor(waterCountMap[density] + next() * 2.5);
+  // Density-based standalone pool generation (increased for 35%+ coverage)
+  const waterCountMap = { sparse: 6, normal: 8.5, dense: 12 };
+  const waterCount = Math.floor(waterCountMap[density] + next() * 4);
   
   for (let i = 0; i < waterCount; i += 1) {
-    const minW = density === "sparse" ? 150 : 180;
-    const maxW = density === "dense" ? 350 : 280;
+    const minW = density === "sparse" ? 220 : 260;
+    const maxW = density === "dense" ? 480 : 380;
     const w = minW + Math.floor(next() * (maxW - minW));
-    const minH = density === "sparse" ? 100 : 120;
-    const maxH = density === "dense" ? 280 : 210;
+    const minH = density === "sparse" ? 160 : 180;
+    const maxH = density === "dense" ? 380 : 300;
     const h = minH + Math.floor(next() * (maxH - minH));
     
     const pool = {
@@ -315,6 +315,25 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     });
   }
 
+  // Add trees (choppable with tongue)
+  const treeCountMap = { sparse: 2, normal: 4, dense: 7 };
+  const treeCount = treeCountMap[density] + Math.floor(next() * 3);
+  
+  for (let i = 0; i < treeCount; i += 1) {
+    structures.push({
+      id: `tree-${chunkX}-${chunkY}-${i}`,
+      type: "tree",
+      x: clampToWorld(baseX + 80 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 160)), 60),
+      y: clampToWorld(baseY + 80 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - 160)), 60),
+      w: 60,
+      h: 60,
+      chopable: true,
+      health: 3,
+    });
+  }
+
+  ensureWaterCoverage(water, lilyPads, chunkRect, next, chunkX, chunkY);
+
   return {
     key: `${chunkX}:${chunkY}`,
     walls,
@@ -325,6 +344,46 @@ export function generateTopDownChunk(chunkX, chunkY, seed = 911) {
     foliage,
     density,
   };
+}
+
+function ensureWaterCoverage(water, lilyPads, chunkRect, next, chunkX, chunkY) {
+  const targetArea = TOP_DOWN_CHUNK_SIZE * TOP_DOWN_CHUNK_SIZE * 0.38;
+  let area = estimatedWaterArea(water, chunkRect);
+  let attempts = 0;
+  while (area < targetArea && attempts < 10) {
+    const w = 320 + Math.floor(next() * 420);
+    const h = 240 + Math.floor(next() * 360);
+    const pond = {
+      id: `coverage-water-${chunkX}-${chunkY}-${attempts}`,
+      type: "water",
+      x: clampToWorld(chunkRect.x + 40 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - w - 80)), w),
+      y: clampToWorld(chunkRect.y + 40 + Math.floor(next() * (TOP_DOWN_CHUNK_SIZE - h - 80)), h),
+      w,
+      h,
+      murky: next() > 0.55,
+    };
+    water.push(pond);
+    lilyPads.push({
+      id: `coverage-pad-${chunkX}-${chunkY}-${attempts}`,
+      x: pond.x + pond.w * (0.25 + next() * 0.5),
+      y: pond.y + pond.h * (0.25 + next() * 0.5),
+      phase: next() * Math.PI * 2,
+    });
+    area += clippedArea(pond, chunkRect);
+    attempts += 1;
+  }
+}
+
+function estimatedWaterArea(water, chunkRect) {
+  return water.reduce((total, item) => total + clippedArea(item, chunkRect), 0);
+}
+
+function clippedArea(rect, bounds) {
+  const minX = Math.max(rect.x, bounds.x);
+  const minY = Math.max(rect.y, bounds.y);
+  const maxX = Math.min(rect.x + rect.w, bounds.x + bounds.w);
+  const maxY = Math.min(rect.y + rect.h, bounds.y + bounds.h);
+  return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
 }
 
 function generateUrbanChunk(chunkX, chunkY, next) {

@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Car, Eye, EyeOff, Hammer, Map, Play, RotateCcw, Sparkles, Trees, Volume2, VolumeX, Waves } from "lucide-react";
+import { Car, Eye, EyeOff, Hammer, Map, Play, RotateCcw, Sparkles, Trees, Trophy, Volume2, VolumeX, Waves } from "lucide-react";
 import "./styles.css";
 import { FrogGame } from "./FrogGame.jsx";
 import { TopDownGame } from "./TopDownGame.jsx";
@@ -11,8 +11,22 @@ const STARTING_PROGRESS = {
     score: 8,
     pearls: 3,
     amber: 3,
+    materials: {
+      wood: 0,
+      clay: 0,
+      stone: 0,
+      crystal: 0,
+      water: 0,
+    },
+    selectedPlaceable: "wood",
+    placedMaterials: [],
+    minedWalls: [],
+    choppedTrees: [],
     pickaxeTier: 0,
     leapUpgrade: 0,
+    speedUpgrade: 0,
+    spawnRateUpgrade: 0,
+    houseLevel: 0,
     checkpoints: [],
     placedLilyPads: [],
     furnitureShopIndex: 0,
@@ -30,7 +44,22 @@ const STARTING_PROGRESS = {
     trophy: 0,
   },
   rewards: {},
+  achievements: {},
 };
+
+const ACHIEVEMENTS = [
+  { id: "tongue-snack", name: "Tongue Snack", test: (progress) => (progress.topDown?.score ?? 0) >= 12 },
+  { id: "first-home", name: "First Home", test: (progress) => Boolean(progress.house) },
+  { id: "timber", name: "Timber", test: (progress) => (progress.topDown?.materials?.wood ?? 0) > 0 || (progress.topDown?.choppedTrees?.length ?? 0) > 0 },
+  { id: "water-miner", name: "Water Miner", test: (progress) => (progress.topDown?.materials?.water ?? 0) > 0 },
+  { id: "bridge-builder", name: "Bridge Builder", test: (progress) => (progress.topDown?.placedMaterials?.length ?? 0) > 0 },
+  { id: "parkour-part", name: "Parkour Part", test: (progress) => Object.values(progress.houseParts ?? {}).some((value) => value > 0) },
+  { id: "checkpoint-maker", name: "Checkpoint Maker", test: (progress) => (progress.topDown?.checkpoints?.length ?? 0) > 0 },
+  { id: "swift-frog", name: "Swift Frog", test: (progress) => (progress.topDown?.speedUpgrade ?? 0) > 0 },
+  { id: "buzz-boom", name: "Buzz Boom", test: (progress) => (progress.topDown?.spawnRateUpgrade ?? 0) > 0 },
+  { id: "second-floor", name: "Second Floor", test: (progress) => (progress.house?.level ?? progress.topDown?.houseLevel ?? 0) >= 10 },
+  { id: "full-house", name: "Full House", test: (progress) => (progress.house?.level ?? progress.topDown?.houseLevel ?? 0) >= 20 },
+];
 
 function loadProgress() {
   try {
@@ -39,10 +68,16 @@ function loadProgress() {
     return {
       ...STARTING_PROGRESS,
       ...saved,
-      topDown: { ...STARTING_PROGRESS.topDown, ...(saved.topDown ?? {}) },
+      house: saved.house ? { ...saved.house, level: saved.house.level ?? saved.topDown?.houseLevel ?? 1 } : null,
+      topDown: {
+        ...STARTING_PROGRESS.topDown,
+        ...(saved.topDown ?? {}),
+        materials: { ...STARTING_PROGRESS.topDown.materials, ...(saved.topDown?.materials ?? {}) },
+      },
       houseParts: { ...STARTING_PROGRESS.houseParts, ...(saved.houseParts ?? {}) },
       placedInterior: { ...STARTING_PROGRESS.placedInterior, ...(saved.placedInterior ?? {}) },
       rewards: { ...STARTING_PROGRESS.rewards, ...(saved.rewards ?? {}) },
+      achievements: { ...STARTING_PROGRESS.achievements, ...(saved.achievements ?? {}) },
     };
   } catch {
     return STARTING_PROGRESS;
@@ -67,9 +102,22 @@ function App() {
         houseParts: { ...current.houseParts, ...(next.houseParts ?? {}) },
         placedInterior: { ...current.placedInterior, ...(next.placedInterior ?? {}) },
         rewards: { ...current.rewards, ...(next.rewards ?? {}) },
+        achievements: { ...current.achievements, ...(next.achievements ?? {}) },
       };
     });
   }, []);
+
+  React.useEffect(() => {
+    const newlyUnlocked = ACHIEVEMENTS.filter((achievement) => !progress.achievements?.[achievement.id] && achievement.test(progress));
+    if (!newlyUnlocked.length) return;
+    setProgress((current) => ({
+      ...current,
+      achievements: {
+        ...current.achievements,
+        ...Object.fromEntries(newlyUnlocked.map((achievement) => [achievement.id, true])),
+      },
+    }));
+  }, [progress]);
 
   React.useEffect(() => {
     localStorage.setItem("froggyland-progress", JSON.stringify(progress));
@@ -148,6 +196,7 @@ function App() {
           </div>
         </section>
       )}
+      {!chromeHidden && <AchievementStrip progress={progress} />}
       {chromeHidden && (
         <button
           type="button"
@@ -179,6 +228,21 @@ function App() {
         />
       )}
     </main>
+  );
+}
+
+function AchievementStrip({ progress }) {
+  const unlocked = ACHIEVEMENTS.filter((achievement) => progress.achievements?.[achievement.id]);
+  const recent = unlocked.slice(-4);
+  return (
+    <section className="achievement-strip" aria-label="Achievements">
+      <span className="achievement-total"><Trophy size={15} />{unlocked.length}/{ACHIEVEMENTS.length}</span>
+      {recent.length ? recent.map((achievement) => (
+        <span key={achievement.id} className="achievement-pill">{achievement.name}</span>
+      )) : (
+        <span className="achievement-pill">No achievements yet</span>
+      )}
+    </section>
   );
 }
 

@@ -7,16 +7,28 @@ import {
 } from "./constants.js";
 import { WORLD } from "./world.js";
 import { clamp, isPointVisible, isRectVisible, roundRect } from "./utils.js";
+import frogSpriteUrl from "../../frog.png";
+
+const FROG_SPRITE = makeImage(frogSpriteUrl);
 
 export function drawGame(ctx, state) {
   const cameraX = state.cameraX;
+  const interiorKind = state.section?.interiorKind ?? null;
   ctx.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
-  drawSky(ctx, cameraX);
+  if (interiorKind) {
+    drawInteriorBackdrop(ctx, state, cameraX, interiorKind);
+  } else {
+    drawSky(ctx, cameraX);
+  }
 
   ctx.save();
   ctx.translate(-cameraX, 0);
-  drawBackLayer(ctx, cameraX);
-  drawCaves(ctx, state.active.caveZones, cameraX);
+  if (interiorKind) {
+    drawInteriorBackLayer(ctx, state, cameraX, interiorKind);
+  } else {
+    drawBackLayer(ctx, cameraX);
+    drawCaves(ctx, state.active.caveZones, cameraX);
+  }
   drawWater(ctx, state.active.waterZones, state.time, cameraX);
   drawPlatforms(ctx, state.active.platforms, cameraX);
   drawDecorations(ctx, state.active.decorations, cameraX);
@@ -39,6 +51,16 @@ export function drawGame(ctx, state) {
   drawAreaBanner(ctx, state);
 }
 
+function makeImage(src) {
+  const image = new Image();
+  image.src = src;
+  return image;
+}
+
+function imageReady(image) {
+  return image.complete && image.naturalWidth > 0;
+}
+
 function drawSky(ctx, cameraX) {
   ctx.fillStyle = "#9eddf4";
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
@@ -57,6 +79,45 @@ function drawCloud(ctx, x, y, scale) {
   ctx.beginPath();
   ctx.ellipse(x, y, 44 * scale, 17 * scale, 0, 0, Math.PI * 2);
   ctx.ellipse(x + 36 * scale, y + 2, 32 * scale, 14 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawInteriorBackdrop(ctx, state, cameraX, interiorKind) {
+  const base = interiorKind === "market"
+    ? ["#f1d099", "#c98a55"]
+    : interiorKind === "house"
+      ? ["#f7dca8", "#c9945b"]
+      : ["#d8b27b", "#95643d"];
+  const gradient = ctx.createLinearGradient(0, 0, 0, VIEW_HEIGHT);
+  gradient.addColorStop(0, base[0]);
+  gradient.addColorStop(1, base[1]);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+  ctx.fillStyle = "rgba(103, 62, 32, 0.18)";
+  const offset = -((cameraX * 0.35) % 92);
+  for (let x = offset; x < VIEW_WIDTH + 100; x += 92) {
+    ctx.fillRect(x, 0, 12, VIEW_HEIGHT);
+  }
+
+  ctx.fillStyle = "rgba(255, 248, 219, 0.38)";
+  for (let x = 40 - ((cameraX * 0.18) % 240); x < VIEW_WIDTH + 160; x += 240) {
+    ctx.beginPath();
+    ctx.ellipse(x, 86 + Math.sin(state.time + x) * 4, 54, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawInteriorBackLayer(ctx, state, cameraX, interiorKind) {
+  const minX = Math.max(0, Math.floor(cameraX / 180) * 180 - 360);
+  const maxX = cameraX + VIEW_WIDTH + 360;
+  ctx.fillStyle = interiorKind === "market" ? "rgba(93, 53, 29, 0.28)" : "rgba(92, 55, 34, 0.22)";
+  for (let x = minX; x < maxX; x += 180) {
+    roundRect(ctx, x, 142, 18, 398, 4);
+    ctx.fill();
+  }
+  ctx.fillStyle = interiorKind === "parkour-house" ? "rgba(53, 33, 22, 0.22)" : "rgba(255, 249, 214, 0.24)";
+  roundRect(ctx, cameraX + 22, 28, VIEW_WIDTH - 44, 70, 8);
   ctx.fill();
 }
 
@@ -162,12 +223,23 @@ function drawPlatforms(ctx, platforms, cameraX) {
     const isCave = platform.type === "cave";
     const isMoss = platform.type === "moss";
     const isRoad = platform.type === "road";
-    ctx.fillStyle = isGround ? "#765b35" : isCave ? "#3d332d" : isRoad ? "#343a3d" : platform.type === "stone" ? "#737a77" : "#5b8f3a";
+    const isWood = platform.type === "wood";
+    ctx.fillStyle = isGround ? "#765b35" : isCave ? "#3d332d" : isRoad ? "#343a3d" : isWood ? "#7a5531" : platform.type === "stone" ? "#737a77" : "#5b8f3a";
     roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 8);
     ctx.fill();
-    ctx.fillStyle = isGround ? "#70b34a" : isCave ? "#6b5a4e" : isRoad ? "#4b5255" : isMoss ? "#73ad58" : platform.type === "stone" ? "#a8b1a9" : "#8ed05c";
+    ctx.fillStyle = isGround ? "#70b34a" : isCave ? "#6b5a4e" : isRoad ? "#4b5255" : isWood ? "#b97a42" : isMoss ? "#73ad58" : platform.type === "stone" ? "#a8b1a9" : "#8ed05c";
     roundRect(ctx, platform.x, platform.y, platform.w, Math.min(16, platform.h), 8);
     ctx.fill();
+    if (isWood) {
+      ctx.strokeStyle = "rgba(61, 36, 19, 0.3)";
+      ctx.lineWidth = 2;
+      for (let x = platform.x + 18; x < platform.x + platform.w; x += 58) {
+        ctx.beginPath();
+        ctx.moveTo(x, platform.y + 8);
+        ctx.lineTo(x + 28, platform.y + Math.min(platform.h - 8, 28));
+        ctx.stroke();
+      }
+    }
     if (isRoad) {
       ctx.strokeStyle = "rgba(255, 223, 93, 0.82)";
       ctx.lineWidth = 4;
@@ -184,6 +256,67 @@ function drawPlatforms(ctx, platforms, cameraX) {
 function drawDecorations(ctx, decorations, cameraX) {
   for (const item of decorations) {
     if (!isPointVisible(cameraX, item.x, 110)) {
+      continue;
+    }
+    if (item.type === "woodBeam") {
+      ctx.fillStyle = "#6c4324";
+      roundRect(ctx, item.x - 12, item.y - 410, 24, 410, 5);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 230, 174, 0.22)";
+      ctx.fillRect(item.x - 7, item.y - 398, 5, 382);
+      continue;
+    }
+    if (item.type === "hangingLantern") {
+      ctx.strokeStyle = "#5b351e";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(item.x, item.y - 92);
+      ctx.lineTo(item.x, item.y - 20);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 214, 93, 0.22)";
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffcf5a";
+      roundRect(ctx, item.x - 13, item.y - 20, 26, 34, 7);
+      ctx.fill();
+      continue;
+    }
+    if (item.type === "roomWindow") {
+      ctx.fillStyle = "#7fc9df";
+      roundRect(ctx, item.x - 30, item.y - 30, 60, 60, 8);
+      ctx.fill();
+      ctx.strokeStyle = "#6d4226";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(item.x, item.y - 28);
+      ctx.lineTo(item.x, item.y + 28);
+      ctx.moveTo(item.x - 28, item.y);
+      ctx.lineTo(item.x + 28, item.y);
+      ctx.stroke();
+      continue;
+    }
+    if (item.type === "roomRug") {
+      ctx.fillStyle = "#6fb760";
+      ctx.beginPath();
+      ctx.ellipse(item.x, item.y, 72, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#f1d269";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      continue;
+    }
+    if (item.type === "roomTrophy") {
+      ctx.fillStyle = "#f2b84b";
+      ctx.beginPath();
+      ctx.moveTo(item.x, item.y - 36);
+      ctx.lineTo(item.x + 22, item.y - 8);
+      ctx.lineTo(item.x + 9, item.y + 16);
+      ctx.lineTo(item.x - 9, item.y + 16);
+      ctx.lineTo(item.x - 22, item.y - 8);
+      ctx.closePath();
+      ctx.fill();
       continue;
     }
     if (item.type === "crystal") {
@@ -458,6 +591,47 @@ function drawGeneratedStructures(ctx, structures, cameraX) {
       continue;
     }
 
+    if (item.type === "houseRoom") {
+      ctx.fillStyle = item.floor === "up" ? "#e7bd7e" : "#efca91";
+      roundRect(ctx, item.x, item.y, item.w, item.h, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(103, 62, 32, 0.42)";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(item.x + 16, item.y + 18, item.w - 32, 12);
+      continue;
+    }
+
+    if (item.type === "houseArch") {
+      ctx.fillStyle = "#7a5531";
+      roundRect(ctx, item.x, item.y, item.w, item.h, 8);
+      ctx.fill();
+      ctx.fillStyle = "#f3d39a";
+      roundRect(ctx, item.x + 8, item.y + 24, item.w - 16, item.h - 24, 8);
+      ctx.fill();
+      continue;
+    }
+
+    if (item.type === "ladder") {
+      ctx.strokeStyle = "#704522";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(item.x, item.y);
+      ctx.lineTo(item.x, item.y + item.h);
+      ctx.moveTo(item.x + item.w, item.y);
+      ctx.lineTo(item.x + item.w, item.y + item.h);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      for (let y = item.y + 20; y < item.y + item.h - 8; y += 30) {
+        ctx.beginPath();
+        ctx.moveTo(item.x, y);
+        ctx.lineTo(item.x + item.w, y);
+        ctx.stroke();
+      }
+      continue;
+    }
+
     if (item.type === "stoneNest") {
       // Nest body
       ctx.fillStyle = "#6f7b75";
@@ -707,6 +881,18 @@ function drawNpcs(ctx, state, npcs, cameraX) {
 }
 
 function merchantLabel(npc) {
+  if (npc.marketAction) {
+    const labels = {
+      trade: "trade flies",
+      leap: "leap upgrade",
+      speed: "speed upgrade",
+      spawn: "spawn upgrade",
+      pickaxe: "buy pickaxe",
+      furniture: "furniture",
+      house: "house upgrade",
+    };
+    return labels[npc.marketAction] ?? "shop";
+  }
   const currency = npc.currency === "pearls" ? "pearls" : npc.currency === "amber" ? "amber" : "flies";
   if (npc.reward === "tongueRange") {
     return `${npc.cost} ${currency} -> tongue +${npc.rangeBonus ?? 90}`;
@@ -821,6 +1007,12 @@ function drawFrog(ctx, frog, time) {
   ctx.save();
   ctx.translate(frog.x + FROG_WIDTH / 2, frog.y + FROG_HEIGHT / 2);
   ctx.scale(frog.facing, 1);
+  if (imageReady(FROG_SPRITE)) {
+    const bob = frog.grounded ? Math.sin(time * 10) * 1.5 : 0;
+    ctx.drawImage(FROG_SPRITE, -FROG_WIDTH / 2, -FROG_HEIGHT / 2 + bob, FROG_WIDTH, FROG_HEIGHT + 8);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = frog.onLilypad ? "#75dc52" : frog.inWater ? "#5bc88f" : "#60cb55";
   ctx.beginPath();
   ctx.ellipse(0, 6, 30, 21 * squish, 0, 0, Math.PI * 2);

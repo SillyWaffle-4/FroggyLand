@@ -1,7 +1,10 @@
 import { TOP_DOWN_WORLD_SIZE, VIEW_HEIGHT, VIEW_WIDTH } from "./constants.js";
 import { beep } from "./audio.js";
 import { TOP_DOWN_CHUNK_SIZE, TOP_DOWN_URBAN, generateTopDownChunk } from "./procedural.js";
-import { clamp, rectsOverlap, roundRect } from "./utils.js";
+import { clamp, lineCircleHit, rectsOverlap, roundRect } from "./utils.js";
+import frogSpriteUrl from "../../frog.png";
+import frogMartUrl from "../../frog-mart.png";
+import parkourHouseUrl from "../../parkour-house.png";
 
 const FROG_SIZE = 42;
 const MOVE_SPEED = 270;
@@ -12,6 +15,11 @@ const MAX_LEAP_UPGRADE = 10;
 const ACTIVE_MARGIN = 220;
 const CENTER = TOP_DOWN_WORLD_SIZE / 2;
 const MINE_RANGE = 96;
+const PLACE_RANGE = 74;
+const TOP_DOWN_TONGUE_MAX = 245;
+const TOP_DOWN_TONGUE_SPEED = 1780;
+const TOP_DOWN_TONGUE_HOLD = 0.08;
+const TOP_DOWN_TONGUE_COOLDOWN = 0.34;
 const DAY_DURATION = 120;
 const NIGHT_DURATION = 180;
 const BIRD_INTERVAL = 20;
@@ -22,6 +30,11 @@ export const CHECKPOINT_COST = { pearls: 6, amber: 2 };
 export const HOUSE_COST = { flies: 8, pearls: 3, amber: 1 };
 export const LILY_PAD_COST = { flies: 3 };
 export const TOP_DOWN_ZOOM = 0.86;
+const PLACEABLE_MATERIALS = ["wood", "clay", "stone", "crystal", "water"];
+const DEFAULT_MATERIALS = { wood: 0, clay: 0, stone: 0, crystal: 0, water: 0 };
+const FROG_SPRITE = makeImage(frogSpriteUrl);
+const FROG_MART_SPRITE = makeImage(frogMartUrl);
+const PARKOUR_HOUSE_SPRITE = makeImage(parkourHouseUrl);
 
 export const FURNITURE_SHOP_ITEMS = [
   { part: "window", name: "Round Window", cost: { pearls: 4 } },
@@ -32,13 +45,14 @@ export const FURNITURE_SHOP_ITEMS = [
 
 export const PICKAXES = [
   { tier: 0, id: "none", name: "None", material: "bare hands", costPearls: 0, maxWallTier: 0, hits: Infinity },
-  { tier: 1, id: "reed", name: "Reed Pickaxe", material: "reed", costPearls: 35, maxWallTier: 1, hits: 5 },
+  { tier: 1, id: "reed", name: "Basic Pickaxe", material: "reed", costPearls: 12, maxWallTier: 1, hits: 5, minesWater: true },
   { tier: 2, id: "stone", name: "Stone Pickaxe", material: "stone", costPearls: 100, maxWallTier: 2, hits: 4 },
   { tier: 3, id: "amber", name: "Amber Pickaxe", material: "amber", costPearls: 180, costAmber: 12, maxWallTier: 2, hits: 2 },
   { tier: 4, id: "crystal", name: "Crystal Pickaxe", material: "crystal", costPearls: 300, costAmber: 25, maxWallTier: 3, hits: 2 },
 ];
 
 const WALL_MATERIALS = {
+  wood: { name: "Wood Wall", tier: 1, hp: 3, color: "#7a5531", shine: "#c28a4f" },
   clay: { name: "Clay Wall", tier: 1, hp: 4, color: "#8b8172", shine: "#b6a78d" },
   stone: { name: "Stone Wall", tier: 2, hp: 6, color: "#68746d", shine: "#aab4ae" },
   crystal: { name: "Crystal Wall", tier: 3, hp: 8, color: "#796c9d", shine: "#d9c8ff" },
@@ -49,7 +63,13 @@ const URBAN_FEATURES = makeUrbanFeatures();
 
 export function createTopDownState(progress = {}) {
   const saved = progress.topDown ?? {};
-  const frog = { x: CENTER - 180, y: CENTER + 420, facing: 1, jumpHeld: false };
+  const frog = {
+    x: saved.frogX ?? CENTER - 180,
+    y: saved.frogY ?? CENTER + 420,
+    facing: saved.facing ?? 1,
+    jumpHeld: false,
+  };
+  const materials = normalizeMaterials(saved.materials);
   const state = {
     worldSize: TOP_DOWN_WORLD_SIZE,
     time: 0,
@@ -60,13 +80,27 @@ export function createTopDownState(progress = {}) {
     score: saved.score ?? 8,
     pearls: saved.pearls ?? 3,
     amber: saved.amber ?? 3,
+    materials,
+    selectedPlaceable: PLACEABLE_MATERIALS.includes(saved.selectedPlaceable) ? saved.selectedPlaceable : firstAvailableMaterial(materials),
+    placedMaterials: (saved.placedMaterials ?? []).map((item, index) => ({
+      id: item.id ?? `placed-material-${index + 1}`,
+      material: item.material ?? "wood",
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+      placed: true,
+    })),
     pickaxeTier: saved.pickaxeTier ?? 0,
     leapUpgrade: saved.leapUpgrade ?? 0,
+    speedUpgrade: saved.speedUpgrade ?? 0,
+    spawnRateUpgrade: saved.spawnRateUpgrade ?? 0,
     leapTimer: 0,
     lilyBoostTimer: 0,
     discoveredStructures: new Set(),
     collectedPickups: new Set(),
-    minedWalls: new Set(),
+    minedWalls: new Set(saved.minedWalls ?? []),
+    choppedTrees: new Set(saved.choppedTrees ?? []),
     wallDamage: new Map(),
     checkpoints: (saved.checkpoints ?? []).map((checkpoint, index) => ({
       id: checkpoint.id ?? `checkpoint-${index + 1}`,
@@ -84,7 +118,8 @@ export function createTopDownState(progress = {}) {
       placed: true,
     })),
     furnitureShopIndex: saved.furnitureShopIndex ?? 0,
-    playerHouse: progress.house ? makePlayerHouse(progress.house.x, progress.house.y) : null,
+    playerHouse: progress.house ? makePlayerHouse(progress.house.x, progress.house.y, progress.house.level ?? saved.houseLevel ?? 1) : null,
+    houseLevel: progress.house?.level ?? saved.houseLevel ?? 0,
     bird: null,
     birdCooldown: getSyncedBirdCooldown(),
     lastBirdSlot: getDayInfo().birdSlot,
@@ -95,6 +130,20 @@ export function createTopDownState(progress = {}) {
     nearbyPlaceId: null,
     carSpawnTimer: 0,
     spawnedCars: [],
+    parkourEntryPoint: null,
+    tongueCooldown: 0,
+    tongue: {
+      active: false,
+      returning: false,
+      hold: 0,
+      length: 0,
+      targetLength: 0,
+      angle: 0,
+      caughtPickupId: null,
+      hitTreeId: null,
+      tipX: frog.x,
+      tipY: frog.y,
+    },
     notice: "Top-down is now a 300k x 300k world. The middle city has shops, trades, and a water-ringed park.",
     noticeTimer: 4.4,
   };
@@ -105,11 +154,29 @@ export function createTopDownState(progress = {}) {
 
 export function makeTopDownProgress(state) {
   return {
+    frogX: state.frog.x,
+    frogY: state.frog.y,
+    facing: state.frog.facing,
     score: state.score,
     pearls: state.pearls,
     amber: state.amber,
+    materials: { ...state.materials },
+    selectedPlaceable: state.selectedPlaceable,
+    placedMaterials: state.placedMaterials.map((item) => ({
+      id: item.id,
+      material: item.material,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    })),
     pickaxeTier: state.pickaxeTier,
     leapUpgrade: state.leapUpgrade,
+    speedUpgrade: state.speedUpgrade,
+    spawnRateUpgrade: state.spawnRateUpgrade,
+    houseLevel: state.houseLevel,
+    minedWalls: [...state.minedWalls],
+    choppedTrees: [...state.choppedTrees],
     checkpoints: state.checkpoints.map((checkpoint) => ({
       id: checkpoint.id,
       x: checkpoint.x,
@@ -133,7 +200,8 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
   state.leapTimer = Math.max(0, state.leapTimer - dt);
   state.lilyBoostTimer = Math.max(0, state.lilyBoostTimer - dt);
   state.hurtCooldown = Math.max(0, state.hurtCooldown - dt);
-  state.pointer = { x: pointer.x, y: pointer.y };
+  state.tongueCooldown = Math.max(0, state.tongueCooldown - dt);
+  state.pointer = { x: pointer.x, y: pointer.y, down: pointer.down };
   state.active = getActiveTopDown(state);
   spawnOffroadCars(state);
 
@@ -154,6 +222,7 @@ export function updateTopDownGame(state, pressed, pointer, dt, soundOn) {
   }
 
   moveTopDownFrog(state, pressed, dt);
+  updateTopDownTongue(state, pointer, dt, soundOn);
   updateCamera(state);
   state.active = getActiveTopDown(state);
   collectTopDownPickups(state, soundOn);
@@ -238,6 +307,12 @@ export function placeTopDownLilyPad(state, soundOn) {
     return false;
   }
 
+  if (!isInWater(state)) {
+    setNotice(state, "You can only place lily pads on water.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
   const newPad = {
     id: `placed-top-pad-${Math.round(state.time * 1000)}-${state.placedLilyPads.length + 1}`,
     x: state.frog.x,
@@ -269,7 +344,8 @@ function moveTopDownFrog(state, pressed, dt) {
   const inWater = isInWater(state);
   const leaping = state.leapTimer > 0;
   const leapSpeed = LEAP_SPEED_MULTIPLIER + state.leapUpgrade * 0.08;
-  const speed = MOVE_SPEED * (inWater && !leaping ? SWIM_SPEED_MULTIPLIER : 1) * (leaping ? leapSpeed : 1);
+  const speedUpgrade = 1 + Math.min(12, state.speedUpgrade ?? 0) * 0.05;
+  const speed = MOVE_SPEED * speedUpgrade * (inWater && !leaping ? SWIM_SPEED_MULTIPLIER : 1) * (leaping ? leapSpeed : 1);
 
   frog.x = clamp(frog.x + (dx / length) * speed * dt, 28, state.worldSize - 28);
   frog.y = clamp(frog.y + (dy / length) * speed * dt, 36, state.worldSize - 36);
@@ -307,11 +383,33 @@ function getActiveTopDown(state) {
       active.walls.push(...chunk.walls.filter((wall) => !state.minedWalls.has(wall.id)));
       active.water.push(...chunk.water);
       active.lilyPads.push(...chunk.lilyPads);
-      active.structures.push(...chunk.structures);
+      active.structures.push(...chunk.structures.filter((item) => item.type !== "tree" || !state.choppedTrees.has(item.id)));
       active.pickups.push(...chunk.pickups);
       active.roads.push(...(chunk.roads ?? []));
       active.parks.push(...(chunk.parks ?? []));
       active.foliage.push(...(chunk.foliage ?? []));
+    }
+  }
+
+  for (const item of state.placedMaterials) {
+    const rect = placedMaterialRect(item);
+    if (!isVisible(rect, minX, minY, maxX, maxY)) continue;
+    if (item.material === "water") {
+      active.water.push({
+        ...rect,
+        id: item.id,
+        type: "water",
+        placed: true,
+        round: 14,
+      });
+    } else {
+      active.walls.push({
+        ...rect,
+        id: item.id,
+        material: item.material,
+        mineable: false,
+        placed: true,
+      });
     }
   }
 
@@ -569,6 +667,7 @@ function collectTopDownPickups(state, soundOn) {
   const rect = frogRect(state, 2);
   for (const pickup of state.active.pickups) {
     if (state.collectedPickups.has(pickup.id)) continue;
+    if (pickup.currency === "flies") continue;
     const pickupRect = { x: pickup.x - 14, y: pickup.y - 14, w: 28, h: 28 };
     if (rectsOverlap(rect, pickupRect)) {
       state.collectedPickups.add(pickup.id);
@@ -582,6 +681,7 @@ function collectTopDownPickups(state, soundOn) {
 function discoverStructures(state, soundOn) {
   for (const item of state.active.structures) {
     if (item.fixed || state.discoveredStructures.has(item.id)) continue;
+    if (item.type === "tree") continue;
     const dx = state.frog.x - item.x;
     const dy = state.frog.y - item.y;
     if (dx * dx + dy * dy < 95 * 95) {
@@ -633,7 +733,38 @@ export function findNearbyMineableWall(state) {
       nearestDistance = distance;
     }
   }
+  return nearest ?? findNearbyMineableWater(state);
+}
+
+function findNearbyMineableWater(state) {
+  if (state.pickaxeTier <= 0) return null;
+  let nearest = null;
+  let nearestDistance = Infinity;
+  const frogCenter = { x: state.frog.x, y: state.frog.y };
+  for (const water of state.active.water) {
+    const closestX = clamp(frogCenter.x, water.x, water.x + water.w);
+    const closestY = clamp(frogCenter.y, water.y, water.y + water.h);
+    const dx = frogCenter.x - closestX;
+    const dy = frogCenter.y - closestY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < MINE_RANGE && distance < nearestDistance) {
+      nearest = { ...water, resourceType: "water", material: "water" };
+      nearestDistance = distance;
+    }
+  }
   return nearest;
+}
+
+export function returnFromParkourHouse(state, soundOn) {
+  if (state.parkourEntryPoint) {
+    state.frog.x = state.parkourEntryPoint.x;
+    state.frog.y = state.parkourEntryPoint.y;
+    state.parkourEntryPoint = null;
+    updateCamera(state);
+    state.active = getActiveTopDown(state);
+    setNotice(state, "Returned from parkour house.", 1.5);
+    if (soundOn) beep(640, 0.05);
+  }
 }
 
 export function interactTopDownPlace(state, soundOn) {
@@ -644,6 +775,7 @@ export function interactTopDownPlace(state, soundOn) {
   }
 
   if (place.kind === "parkour") {
+    state.parkourEntryPoint = { x: state.frog.x, y: state.frog.y };
     setNotice(state, "Entering a short platformer parkour house. Clear it to earn a part.", 2);
     if (soundOn) beep(900, 0.06);
     return { mode: "platformer", entry: `parkour:${place.id}` };
@@ -678,27 +810,36 @@ export function buildTopDownHouse(state, soundOn) {
   state.score -= HOUSE_COST.flies;
   state.pearls -= HOUSE_COST.pearls;
   state.amber -= HOUSE_COST.amber;
-  const house = makePlayerHouse(state.frog.x + 92, state.frog.y - 6);
+  const house = makePlayerHouse(state.frog.x + 92, state.frog.y - 6, 1);
   state.playerHouse = house;
+  state.houseLevel = 1;
   setNotice(state, "House placed. Press E near it to edit inside in platformer mode.", 3.2);
   if (soundOn) beep(1040, 0.07);
-  return { x: house.x, y: house.y };
+  return { x: house.x, y: house.y, level: 1 };
 }
 
 export function mineNearbyWall(state, soundOn) {
   const pickaxe = getCurrentPickaxe(state);
   if (pickaxe.tier <= 0) {
-    setNotice(state, "You need to buy a pickaxe before mining walls.");
+    setNotice(state, "You need to buy the basic pickaxe before mining walls or water.");
     if (soundOn) beep(150, 0.04);
     return false;
   }
 
-  const wall = findNearbyMineableWall(state);
-  if (!wall) {
-    setNotice(state, "No mineable wall close enough. Stand beside a generated wall and press M.");
+  const resource = findNearbyMineableWall(state);
+  if (!resource) {
+    setNotice(state, "No mineable wall or water close enough. Stand beside one and press M.");
     return false;
   }
 
+  if (resource.resourceType === "water") {
+    addMaterial(state, "water", 1);
+    setNotice(state, `${pickaxe.name} bottled a water block. Press V to place mined resources.`);
+    if (soundOn) beep(760, 0.05);
+    return true;
+  }
+
+  const wall = resource;
   const material = WALL_MATERIALS[wall.material ?? "clay"] ?? WALL_MATERIALS.clay;
   if (pickaxe.maxWallTier < material.tier) {
     setNotice(state, `${pickaxe.name} cannot mine ${material.name}. Upgrade your pickaxe material.`);
@@ -712,7 +853,8 @@ export function mineNearbyWall(state, soundOn) {
     state.wallDamage.delete(wall.id);
     state.minedWalls.add(wall.id);
     state.active.walls = state.active.walls.filter((item) => item.id !== wall.id);
-    setNotice(state, `${pickaxe.name} mined through a ${material.name}.`);
+    addMaterial(state, wall.material ?? "clay", 1);
+    setNotice(state, `${pickaxe.name} mined a ${material.name}. You gained ${material.name.toLowerCase()} material.`);
     if (soundOn) beep(1040, 0.06);
     return true;
   }
@@ -720,6 +862,187 @@ export function mineNearbyWall(state, soundOn) {
   state.wallDamage.set(wall.id, damage);
   setNotice(state, `${material.name} cracked ${damage}/${requiredHits}.`);
   if (soundOn) beep(520, 0.04);
+  return true;
+}
+
+export function cycleTopDownPlaceable(state, soundOn) {
+  const available = PLACEABLE_MATERIALS.filter((material) => (state.materials[material] ?? 0) > 0);
+  if (!available.length) {
+    setNotice(state, "Mine water, walls, or trees before placing resources.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+  const currentIndex = available.indexOf(state.selectedPlaceable);
+  state.selectedPlaceable = available[(currentIndex + 1 + available.length) % available.length];
+  setNotice(state, `Selected ${state.selectedPlaceable}. Press V to place it.`, 1.8);
+  if (soundOn) beep(560, 0.035);
+  return true;
+}
+
+export function placeTopDownMaterial(state, soundOn) {
+  const selected = resolveSelectedPlaceable(state);
+  if (!selected) {
+    setNotice(state, "Mine water, walls, or trees before placing resources.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  const material = selected;
+  const isWater = material === "water";
+  const w = isWater ? 104 : 68;
+  const h = isWater ? 72 : 54;
+  const x = clamp(state.frog.x + state.frog.facing * PLACE_RANGE - w / 2, 20, state.worldSize - w - 20);
+  const y = clamp(state.frog.y - h / 2, 20, state.worldSize - h - 20);
+  const rect = { x, y, w, h };
+
+  if (!isWater && rectsOverlap(frogRect(state, 4), rect)) {
+    setNotice(state, "Step back before placing a solid block.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  if (!isWater && state.active.walls.some((wall) => rectsOverlap(rect, wall))) {
+    setNotice(state, "That block would overlap another wall.");
+    if (soundOn) beep(150, 0.04);
+    return false;
+  }
+
+  state.materials[material] -= 1;
+  const placed = {
+    id: `placed-${material}-${Math.round(state.time * 1000)}-${state.placedMaterials.length + 1}`,
+    material,
+    ...rect,
+    placed: true,
+  };
+  state.placedMaterials.push(placed);
+  state.active = getActiveTopDown(state);
+  state.selectedPlaceable = firstAvailableMaterial(state.materials, state.selectedPlaceable);
+  setNotice(state, `Placed ${material}. ${isWater ? "Lily pads can go on placed water." : "Solid blocks can shape paths."}`, 2.4);
+  if (soundOn) beep(isWater ? 760 : 620, 0.05);
+  return true;
+}
+
+export function chopNearbyTree(state, soundOn) {
+  const frogRect = { x: state.frog.x - 38, y: state.frog.y - 38, w: 76, h: 76 };
+  const tree = state.active.structures.find((item) => 
+    !state.choppedTrees.has(item.id) &&
+    item.type === "tree" && rectsOverlap(frogRect, {
+      x: item.x - item.w / 2,
+      y: item.y - item.h / 2,
+      w: item.w,
+      h: item.h,
+    })
+  );
+
+  if (!tree) {
+    setNotice(state, "No trees close enough. Use your tongue near a tree to chop it down.");
+    return false;
+  }
+
+  return damageTopDownTree(state, tree, soundOn);
+}
+
+function damageTopDownTree(state, tree, soundOn) {
+  const damage = (state.wallDamage.get(tree.id) ?? 0) + 1;
+  const requiredHits = tree.health ?? 3;
+  
+  if (damage >= requiredHits) {
+    state.wallDamage.delete(tree.id);
+    state.choppedTrees.add(tree.id);
+    state.active.structures = state.active.structures.filter((item) => item.id !== tree.id);
+    addMaterial(state, "wood", 4);
+    setNotice(state, "Tree chopped down. Gained 4 wood.");
+    if (soundOn) beep(880, 0.07);
+    return true;
+  }
+
+  state.wallDamage.set(tree.id, damage);
+  setNotice(state, `Tree damaged ${damage}/${requiredHits}.`);
+  if (soundOn) beep(660, 0.04);
+  return true;
+}
+
+function updateTopDownTongue(state, pointer, dt, soundOn) {
+  const tongue = state.tongue;
+  if (!tongue.active) {
+    if (pointer.down && state.tongueCooldown <= 0) {
+      startTopDownTongue(state, pointer);
+    }
+    return;
+  }
+
+  const mouthX = state.frog.x + state.frog.facing * 20;
+  const mouthY = state.frog.y - 8;
+  const target = tongue.returning ? 0 : tongue.targetLength;
+  const direction = tongue.returning ? -1 : 1;
+  tongue.length += direction * TOP_DOWN_TONGUE_SPEED * dt;
+  tongue.length = clamp(tongue.length, 0, tongue.targetLength);
+  tongue.tipX = mouthX + Math.cos(tongue.angle) * tongue.length;
+  tongue.tipY = mouthY + Math.sin(tongue.angle) * tongue.length;
+
+  if (!tongue.returning) {
+    const fly = state.active.pickups.find((pickup) => (
+      pickup.currency === "flies" &&
+      !state.collectedPickups.has(pickup.id) &&
+      lineCircleHit(mouthX, mouthY, tongue.tipX, tongue.tipY, pickup.x, pickup.y, 18)
+    ));
+    if (fly) {
+      tongue.caughtPickupId = fly.id;
+      tongue.returning = true;
+      state.collectedPickups.add(fly.id);
+      addCurrency(state, "flies", fly.value ?? 1);
+      setNotice(state, `Tongue caught ${fly.value ?? 1} flies.`);
+      if (soundOn) beep(920, 0.035);
+    }
+
+    if (!tongue.returning) {
+      const tree = state.active.structures.find((item) => (
+        item.type === "tree" &&
+        !state.choppedTrees.has(item.id) &&
+        lineCircleHit(mouthX, mouthY, tongue.tipX, tongue.tipY, item.x, item.y - 16, 36)
+      ));
+      if (tree) {
+        tongue.hitTreeId = tree.id;
+        tongue.returning = true;
+        damageTopDownTree(state, tree, soundOn);
+      }
+    }
+
+    if (Math.abs(tongue.length - target) < 1) {
+      tongue.hold += dt;
+      if (tongue.hold > TOP_DOWN_TONGUE_HOLD) {
+        tongue.returning = true;
+      }
+    }
+  }
+
+  if (tongue.returning && tongue.length <= 1) {
+    tongue.active = false;
+    tongue.caughtPickupId = null;
+    tongue.hitTreeId = null;
+    state.tongueCooldown = TOP_DOWN_TONGUE_COOLDOWN;
+  }
+}
+
+function startTopDownTongue(state, pointer) {
+  const mouthX = state.frog.x + state.frog.facing * 20;
+  const mouthY = state.frog.y - 8;
+  const dx = pointer.x - mouthX;
+  const dy = pointer.y - mouthY;
+  const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+  state.tongue = {
+    active: true,
+    returning: false,
+    hold: 0,
+    length: 0,
+    targetLength: Math.min(distance, TOP_DOWN_TONGUE_MAX),
+    angle: Math.atan2(dy, dx),
+    caughtPickupId: null,
+    hitTreeId: null,
+    tipX: mouthX,
+    tipY: mouthY,
+  };
+  state.frog.facing = dx < 0 ? -1 : 1;
   return true;
 }
 
@@ -732,6 +1055,7 @@ export function drawTopDownGame(ctx, state) {
   ctx.translate(-state.cameraX, -state.cameraY);
   drawWater(ctx, state);
   drawParks(ctx, state);
+  drawRoads(ctx, state);
   drawLilyPads(ctx, state);
   drawWalls(ctx, state);
   drawStructures(ctx, state);
@@ -740,6 +1064,7 @@ export function drawTopDownGame(ctx, state) {
   drawCheckpoints(ctx, state);
   drawTopDownPickups(ctx, state);
   drawBird(ctx, state);
+  drawTopDownTongue(ctx, state);
   drawFrog(ctx, state);
   ctx.restore();
   drawDayNightOverlay(ctx, state);
@@ -1054,11 +1379,19 @@ function drawStructures(ctx, state) {
     ctx.translate(item.x, item.y);
     ctx.globalAlpha = found ? 1 : 0.72;
     if (item.type === "marketHall") {
-      drawShop(ctx, item, "#9d6cc7", "MK");
+      if (imageReady(FROG_MART_SPRITE)) {
+        drawStructureSprite(ctx, FROG_MART_SPRITE, item);
+      } else {
+        drawShop(ctx, item, "#9d6cc7", "MK");
+      }
     } else if (item.type === "parkourHouse") {
-      drawHousePortal(ctx, item, "#5fcb55", "PK");
+      if (imageReady(PARKOUR_HOUSE_SPRITE)) {
+        drawStructureSprite(ctx, PARKOUR_HOUSE_SPRITE, item);
+      } else {
+        drawHousePortal(ctx, item, "#5fcb55", "PK");
+      }
     } else if (item.type === "playerHouse") {
-      drawHousePortal(ctx, item, "#ffdf5d", "MY");
+      drawHousePortal(ctx, item, "#ffdf5d", `L${item.level ?? 1}`);
     } else if (item.type === "urbanBuilding") {
       drawCityBuilding(ctx, item);
     } else if (item.type === "ruin") {
@@ -1087,6 +1420,31 @@ function drawStructures(ctx, state) {
       ctx.arc(-item.w / 3, item.h / 2 - 12, 8, 0, Math.PI * 2);
       ctx.arc(item.w / 3, item.h / 2 - 12, 8, 0, Math.PI * 2);
       ctx.fill();
+    } else if (item.type === "tree") {
+      const damage = state.wallDamage.get(item.id) ?? 0;
+      // Tree trunk
+      ctx.fillStyle = "#6b4423";
+      roundRect(ctx, -8, -12, 16, 26, 4);
+      ctx.fill();
+      // Tree canopy
+      ctx.fillStyle = "#3a7b2d";
+      ctx.beginPath();
+      ctx.ellipse(0, -20, 28, 24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#4a9c35";
+      ctx.beginPath();
+      ctx.ellipse(0, -18, 24, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (damage > 0) {
+        ctx.strokeStyle = "rgba(255, 100, 100, 0.72)";
+        ctx.lineWidth = 3;
+        for (let i = 0; i < damage; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(-18 + i * 12, -34);
+          ctx.lineTo(-3 + i * 10, -9);
+          ctx.stroke();
+        }
+      }
     } else {
       ctx.fillStyle = item.color;
       roundRect(ctx, -item.w / 2, -item.h / 2 + 10, item.w, item.h - 10, 8);
@@ -1113,6 +1471,13 @@ function drawStructures(ctx, state) {
     }
     ctx.restore();
   }
+}
+
+function drawStructureSprite(ctx, image, item) {
+  const ratio = image.naturalWidth / image.naturalHeight || 1;
+  const drawH = item.h + 42;
+  const drawW = Math.min(item.w + 58, drawH * ratio);
+  ctx.drawImage(image, -drawW / 2, -drawH / 2 - 16, drawW, drawH);
 }
 
 function drawHousePortal(ctx, item, roofColor, label) {
@@ -1256,6 +1621,24 @@ function drawTopDownPickups(ctx, state) {
     ctx.save();
     ctx.translate(pickup.x, pickup.y);
     const pulse = 1 + Math.sin(state.time * 4 + pickup.x * 0.01) * 0.12;
+    if (pickup.currency === "flies") {
+      ctx.rotate(Math.sin(state.time * 10 + pickup.x) * 0.12);
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      ctx.beginPath();
+      ctx.ellipse(-8, -5, 10 * pulse, 5, -0.55, 0, Math.PI * 2);
+      ctx.ellipse(8, -5, 10 * pulse, 5, 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1c2520";
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 8, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffe96f";
+      ctx.beginPath();
+      ctx.arc(4, -1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
     ctx.fillStyle = pickup.currency === "pearls" ? "#f6b7ff" : pickup.currency === "amber" ? "#ffbd5f" : "#ffe96f";
     ctx.beginPath();
     ctx.arc(0, 0, 10 * pulse, 0, Math.PI * 2);
@@ -1267,12 +1650,41 @@ function drawTopDownPickups(ctx, state) {
   }
 }
 
+function drawTopDownTongue(ctx, state) {
+  const tongue = state.tongue;
+  if (!tongue.active) return;
+  const mouthX = state.frog.x + state.frog.facing * 20;
+  const mouthY = state.frog.y - 8;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#ff6f8e";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(mouthX, mouthY);
+  ctx.lineTo(tongue.tipX, tongue.tipY);
+  ctx.stroke();
+  ctx.strokeStyle = "#ffc2cc";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(mouthX, mouthY);
+  ctx.lineTo(tongue.tipX, tongue.tipY);
+  ctx.stroke();
+  ctx.fillStyle = "#ff4d79";
+  ctx.beginPath();
+  ctx.arc(tongue.tipX, tongue.tipY, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function drawFrog(ctx, state) {
   const frog = state.frog;
   const leaping = state.leapTimer > 0;
   ctx.save();
   ctx.translate(frog.x, frog.y - (leaping ? 16 : 0));
   ctx.scale(frog.facing, 1);
+  if (imageReady(FROG_SPRITE)) {
+    ctx.drawImage(FROG_SPRITE, -26, -28, 52, 60);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = leaping ? "rgba(255, 223, 93, 0.36)" : "rgba(19, 36, 26, 0.18)";
   ctx.beginPath();
   ctx.ellipse(0, leaping ? 32 : 18, leaping ? 36 : 28, leaping ? 10 : 8, 0, 0, Math.PI * 2);
@@ -1292,6 +1704,54 @@ function drawFrog(ctx, state) {
   ctx.arc(16, -14, 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function makeImage(src) {
+  const image = new Image();
+  image.src = src;
+  return image;
+}
+
+function imageReady(image) {
+  return image.complete && image.naturalWidth > 0;
+}
+
+function normalizeMaterials(materials = {}) {
+  return {
+    ...DEFAULT_MATERIALS,
+    ...Object.fromEntries(
+      Object.entries(materials).map(([key, value]) => [key, Math.max(0, Number(value) || 0)]),
+    ),
+  };
+}
+
+function firstAvailableMaterial(materials, preferred = null) {
+  if (preferred && (materials[preferred] ?? 0) > 0) return preferred;
+  return PLACEABLE_MATERIALS.find((material) => (materials[material] ?? 0) > 0) ?? "wood";
+}
+
+function resolveSelectedPlaceable(state) {
+  const selected = firstAvailableMaterial(state.materials, state.selectedPlaceable);
+  if ((state.materials[selected] ?? 0) <= 0) return null;
+  state.selectedPlaceable = selected;
+  return selected;
+}
+
+function addMaterial(state, material, amount) {
+  if (!PLACEABLE_MATERIALS.includes(material)) return;
+  state.materials[material] = (state.materials[material] ?? 0) + amount;
+  if (!state.selectedPlaceable || (state.materials[state.selectedPlaceable] ?? 0) <= 0) {
+    state.selectedPlaceable = material;
+  }
+}
+
+function placedMaterialRect(item) {
+  return {
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+  };
 }
 
 function makeUrbanFeatures() {
@@ -1460,7 +1920,7 @@ function makeUrbanTraffic(roads) {
   return traffic;
 }
 
-function makePlayerHouse(x, y) {
+function makePlayerHouse(x, y, level = 1) {
   return {
     id: "player-house",
     type: "playerHouse",
@@ -1470,8 +1930,9 @@ function makePlayerHouse(x, y) {
     y,
     w: 170,
     h: 120,
+    level,
     fixed: true,
-    talk: "Press E to edit the inside in platformer mode.",
+    talk: `Press E to enter your level ${level} house platformer.`,
   };
 }
 
