@@ -502,6 +502,8 @@ function makeChunkTraffic(roads, chunkX, chunkY) {
         speed: 132 + lane * 42 + Math.abs(chunkX + chunkY) % 30,
         offset: (lane * 0.43 + Math.abs(chunkX * 0.17 + chunkY * 0.11)) % 1,
         direction: lane % 2 === 0 ? 1 : -1,
+        carW: 76,
+        carH: 28,
         color: colors[(Math.abs(chunkX) + Math.abs(chunkY) + lane) % colors.length],
       });
     }

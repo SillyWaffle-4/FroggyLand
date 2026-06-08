@@ -1301,8 +1301,8 @@ function drawVehicles(ctx, state) {
 }
 
 function getTopDownVehicleRect(car, time) {
-  const vehicleW = car.carW ?? 82;
-  const vehicleH = car.carH ?? Math.max(30, car.h - 18);
+  const vehicleW = clamp(car.carW ?? 78, 48, 118);
+  const vehicleH = clamp(car.carH ?? 28, 22, 36);
   const laneLength = Math.max(vehicleW, (car.axis === "y" ? car.h : car.w) - vehicleW);
   const cycle = laneLength / car.speed;
   const shiftedTime = (time + (car.offset ?? 0) * cycle) % cycle;
