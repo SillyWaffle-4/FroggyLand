@@ -33,6 +33,7 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
   const pointerRef = React.useRef({ x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, down: false });
   const soundOnRef = React.useRef(soundOn);
   const [hud, setHud] = React.useState(() => makeTopDownHud(stateRef.current));
+  const [inventoryHidden, setInventoryHidden] = React.useState(false);
 
   React.useEffect(() => {
     soundOnRef.current = soundOn;
@@ -266,7 +267,24 @@ export function TopDownGame({ soundOn, progress, onProgressChange, onEnterPlatfo
         />
       </div>
 
-      <aside className="panel">
+      {inventoryHidden && (
+        <button
+          type="button"
+          className="inventory-toggle inventory-toggle-collapsed"
+          onClick={() => setInventoryHidden(false)}
+        >
+          Inventory
+        </button>
+      )}
+
+      <aside className={`panel ${inventoryHidden ? "panel-hidden" : ""}`}>
+        <button
+          type="button"
+          className="inventory-toggle"
+          onClick={() => setInventoryHidden(true)}
+        >
+          Shrink Inventory
+        </button>
         <div className="area-name">
           <span>Mode</span>
           <strong>Top Down Pondland</strong>

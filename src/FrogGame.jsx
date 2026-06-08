@@ -68,6 +68,7 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
   const pointerRef = React.useRef({ x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, down: false });
   const soundOnRef = React.useRef(soundOn);
   const [hud, setHud] = React.useState(() => makeHud(stateRef.current, entry, progress));
+  const [inventoryHidden, setInventoryHidden] = React.useState(false);
 
   React.useEffect(() => {
     soundOnRef.current = soundOn;
@@ -253,7 +254,24 @@ function PlatformerGame({ soundOn, entry = "openMap", progress = EMPTY_PROGRESS,
         />
       </div>
 
-      <aside className="panel">
+      {inventoryHidden && (
+        <button
+          type="button"
+          className="inventory-toggle inventory-toggle-collapsed"
+          onClick={() => setInventoryHidden(false)}
+        >
+          Inventory
+        </button>
+      )}
+
+      <aside className={`panel ${inventoryHidden ? "panel-hidden" : ""}`}>
+        <button
+          type="button"
+          className="inventory-toggle"
+          onClick={() => setInventoryHidden(true)}
+        >
+          Shrink Inventory
+        </button>
         <div className="area-name">
           <span>Area</span>
           <strong>{hud.regionName}</strong>

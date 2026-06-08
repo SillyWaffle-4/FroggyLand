@@ -704,6 +704,10 @@ canvas:focus-visible {
   max-height: min(52vh, calc(100vh - 118px));
 }
 
+.play-shell .panel.panel-hidden {
+  display: none;
+}
+
 .play-shell.chrome-hidden .panel {
   top: 10px;
   max-height: min(60vh, calc(100vh - 20px));
@@ -759,6 +763,38 @@ canvas:focus-visible {
   min-height: 30px;
   padding: 0 6px;
   font-size: 0.72rem;
+}
+
+.inventory-toggle {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(28, 83, 50, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #173820;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(47, 125, 70, 0.1);
+}
+
+.inventory-toggle:hover {
+  background: var(--leaf-soft);
+}
+
+.inventory-toggle-collapsed {
+  position: absolute;
+  z-index: 7;
+  top: 108px;
+  left: 10px;
+  min-height: 34px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(31, 71, 52, 0.16);
+}
+
+.play-shell.chrome-hidden .inventory-toggle-collapsed {
+  top: 10px;
 }
 
 .play-shell .teleport-panel {

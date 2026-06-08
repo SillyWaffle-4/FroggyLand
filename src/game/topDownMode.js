@@ -3,7 +3,6 @@ import { beep } from "./audio.js";
 import { TOP_DOWN_CHUNK_SIZE, TOP_DOWN_URBAN, generateTopDownChunk } from "./procedural.js";
 import { clamp, lineCircleHit, rectsOverlap, roundRect } from "./utils.js";
 import frogSpriteUrl from "../../frog.png";
-import frogMartUrl from "../../frog-mart.png";
 
 const FROG_SIZE = 42;
 const MOVE_SPEED = 270;
@@ -32,7 +31,6 @@ export const TOP_DOWN_ZOOM = 0.86;
 const PLACEABLE_MATERIALS = ["wood", "clay", "stone", "crystal", "water"];
 const DEFAULT_MATERIALS = { wood: 0, clay: 0, stone: 0, crystal: 0, water: 0 };
 const FROG_SPRITE = makeImage(frogSpriteUrl);
-const FROG_MART_SPRITE = makeImage(frogMartUrl);
 
 export const FURNITURE_SHOP_ITEMS = [
   { part: "window", name: "Round Window", cost: { pearls: 4 } },
@@ -1377,11 +1375,7 @@ function drawStructures(ctx, state) {
     ctx.translate(item.x, item.y);
     ctx.globalAlpha = found ? 1 : 0.72;
     if (item.type === "marketHall") {
-      if (imageReady(FROG_MART_SPRITE)) {
-        drawStructureSprite(ctx, FROG_MART_SPRITE, item);
-      } else {
-        drawShop(ctx, item, "#9d6cc7", "MK");
-      }
+      drawShop(ctx, item, "#9d6cc7", "MK");
     } else if (item.type === "parkourHouse") {
       drawHousePortal(ctx, item, "#5fcb55", "PK");
     } else if (item.type === "playerHouse") {
