@@ -536,9 +536,9 @@ function runMarketAction(action, progress, onProgressChange) {
 
   if (action === "leap") {
     if ((nextTopDown.leapUpgrade ?? 0) >= 10) return "Lily leap is already level 10.";
-    if ((nextTopDown.amber ?? 0) < 3 || (nextTopDown.pearls ?? 0) < 2) return "Leap upgrade costs 3 amber and 2 pearls.";
-    nextTopDown.amber -= 3;
-    nextTopDown.pearls -= 2;
+    const cost = discountCost({ amber: 3, pearls: 2 });
+    if (!canAffordMarketCost(nextTopDown, cost)) return `Leap upgrade costs ${marketCostLabel(cost)}.`;
+    spendMarketCost(nextTopDown, cost);
     nextTopDown.leapUpgrade = (nextTopDown.leapUpgrade ?? 0) + 1;
     onProgressChange?.({ topDown: nextTopDown });
     return `Lily leap upgraded to level ${nextTopDown.leapUpgrade}.`;
@@ -547,7 +547,7 @@ function runMarketAction(action, progress, onProgressChange) {
   if (action === "speed") {
     if ((nextTopDown.speedUpgrade ?? 0) >= 12) return "Speed is already maxed out.";
     const nextLevel = (nextTopDown.speedUpgrade ?? 0) + 1;
-    const cost = { flies: 4 + nextLevel * 2, pearls: 1 + Math.floor(nextLevel / 3), amber: Math.floor(nextLevel / 5) };
+    const cost = discountCost({ flies: 4 + nextLevel * 2, pearls: 1 + Math.floor(nextLevel / 3), amber: Math.floor(nextLevel / 5) });
     if (!canAffordMarketCost(nextTopDown, cost)) return `Speed ${nextLevel} costs ${marketCostLabel(cost)}.`;
     spendMarketCost(nextTopDown, cost);
     nextTopDown.speedUpgrade = nextLevel;
@@ -558,7 +558,7 @@ function runMarketAction(action, progress, onProgressChange) {
   if (action === "spawn") {
     if ((nextTopDown.spawnRateUpgrade ?? 0) >= 12) return "Fly spawn rate is already maxed out.";
     const nextLevel = (nextTopDown.spawnRateUpgrade ?? 0) + 1;
-    const cost = { flies: 6 + nextLevel * 2, pearls: 2 + Math.floor(nextLevel / 4), amber: Math.floor(nextLevel / 4) };
+    const cost = discountCost({ flies: 6 + nextLevel * 2, pearls: 2 + Math.floor(nextLevel / 4), amber: Math.floor(nextLevel / 4) });
     if (!canAffordMarketCost(nextTopDown, cost)) return `Spawn rate ${nextLevel} costs ${marketCostLabel(cost)}.`;
     spendMarketCost(nextTopDown, cost);
     nextTopDown.spawnRateUpgrade = nextLevel;
@@ -569,13 +569,11 @@ function runMarketAction(action, progress, onProgressChange) {
   if (action === "pickaxe") {
     const nextPickaxe = PICKAXES.find((pickaxe) => pickaxe.tier === (nextTopDown.pickaxeTier ?? 0) + 1);
     if (!nextPickaxe) return "You already have the strongest pickaxe.";
-    const amberCost = nextPickaxe.costAmber ?? 0;
-    if ((nextTopDown.pearls ?? 0) < nextPickaxe.costPearls || (nextTopDown.amber ?? 0) < amberCost) {
-      const amberText = amberCost > 0 ? ` and ${amberCost} amber` : "";
-      return `${nextPickaxe.name} costs ${nextPickaxe.costPearls} pearls${amberText}.`;
+    const cost = discountCost({ pearls: nextPickaxe.costPearls, amber: nextPickaxe.costAmber ?? 0 });
+    if (!canAffordMarketCost(nextTopDown, cost)) {
+      return `${nextPickaxe.name} costs ${marketCostLabel(cost)}.`;
     }
-    nextTopDown.pearls -= nextPickaxe.costPearls;
-    nextTopDown.amber -= amberCost;
+    spendMarketCost(nextTopDown, cost);
     nextTopDown.pickaxeTier = nextPickaxe.tier;
     onProgressChange?.({ topDown: nextTopDown });
     return `Bought ${nextPickaxe.name}.`;
@@ -587,7 +585,7 @@ function runMarketAction(action, progress, onProgressChange) {
     if (currentLevel >= 20) return "Your house is already level 20.";
     const nextLevel = currentLevel + 1;
     const materials = { wood: 0, clay: 0, stone: 0, crystal: 0, water: 0, ...(nextTopDown.materials ?? {}) };
-    const cost = getHouseUpgradeCost(nextLevel);
+    const cost = getDiscountedHouseUpgradeCost(nextLevel);
     if (!canAffordMarketCost(nextTopDown, cost.currency) || !canAffordMaterials(materials, cost.materials)) {
       return `House level ${nextLevel} costs ${houseUpgradeCostLabel(cost)}.`;
     }
@@ -606,8 +604,9 @@ function runMarketAction(action, progress, onProgressChange) {
 
   const shopIndex = nextTopDown.furnitureShopIndex ?? 0;
   const item = FURNITURE_SHOP_ITEMS[shopIndex % FURNITURE_SHOP_ITEMS.length];
-  if (!canAffordMarketCost(nextTopDown, item.cost)) return `${item.name} costs ${marketCostLabel(item.cost)}.`;
-  spendMarketCost(nextTopDown, item.cost);
+  const cost = discountCost(item.cost);
+  if (!canAffordMarketCost(nextTopDown, cost)) return `${item.name} costs ${marketCostLabel(cost)}.`;
+  spendMarketCost(nextTopDown, cost);
   nextTopDown.furnitureShopIndex = shopIndex + 1;
   grantPart[item.part] = (progress.houseParts?.[item.part] ?? 0) + 1;
   onProgressChange?.({ topDown: nextTopDown, houseParts: grantPart, placedInterior: grantPart });
@@ -656,7 +655,7 @@ function runHouseAction(action, progress, onProgressChange) {
       return { message: "Your house is already level 20." };
     }
     const nextLevel = currentLevel + 1;
-    const cost = getHouseUpgradeCost(nextLevel);
+    const cost = getDiscountedHouseUpgradeCost(nextLevel);
     if (!canAffordMarketCost(nextTopDown, cost.currency) || !canAffordMaterials(nextTopDown.materials, cost.materials)) {
       return { message: `House level ${nextLevel} costs ${houseUpgradeCostLabel(cost)}.` };
     }
@@ -692,6 +691,23 @@ function marketActionButtonLabel(action) {
   if (action === "pickaxe") return "Buy Pickaxe";
   if (action === "house") return "Upgrade House";
   return "Buy Furniture";
+}
+
+function discountCost(cost) {
+  return Object.fromEntries(
+    Object.entries(cost).map(([currency, amount]) => [
+      currency,
+      amount > 0 ? Math.max(1, Math.ceil(amount / 2)) : 0,
+    ]),
+  );
+}
+
+function getDiscountedHouseUpgradeCost(nextLevel) {
+  const cost = getHouseUpgradeCost(nextLevel);
+  return {
+    currency: discountCost(cost.currency),
+    materials: discountCost(cost.materials),
+  };
 }
 
 function canAffordMarketCost(topDown, cost) {

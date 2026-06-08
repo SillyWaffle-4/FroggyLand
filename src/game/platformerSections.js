@@ -119,15 +119,27 @@ export function housePlatformerSection(level = 1, placedInterior = {}) {
 
   if (houseLevel >= 10) {
     const ladderX = Math.min(width - 240, 330);
-    structures.push({ id: "house-ladder", type: "ladder", x: ladderX, y: upperY + 28, w: 42, h: floorY - upperY - 12 });
-    for (let i = 0; i < 6; i += 1) {
-      platforms.push({ id: `ladder-rung-${i}`, type: "wood", x: ladderX - 18 + (i % 2) * 28, y: floorY - 62 - i * 36, w: 86, h: 12 });
+    structures.push({ id: "house-ladder", type: "ladder", x: ladderX, y: upperY - 18, w: 42, h: floorY - upperY + 46 });
+    for (let i = 0; i < 8; i += 1) {
+      platforms.push({ id: `ladder-rung-${i}`, type: "wood", x: ladderX - 18 + (i % 2) * 28, y: floorY - 54 - i * 33, w: 86, h: 12 });
     }
-    messages.push({ x: ladderX + 34, y: upperY + 14, w: 240, text: "Second floor ladder" });
+    messages.push({ x: ladderX + 34, y: upperY + 14, w: 280, text: "Ladder opening connects both floors" });
   }
 
   if (upstairsRooms > 0) {
-    platforms.push({ id: "house-upper-floor", type: "wood", x: 80, y: upperY, w: upstairsRooms * roomW, h: 26 });
+    const upperFloorX = 80;
+    const upperFloorW = upstairsRooms * roomW;
+    const ladderX = Math.min(width - 240, 330);
+    const ladderGapX = ladderX - 34;
+    const ladderGapW = 110;
+    if (ladderGapX > upperFloorX + 38) {
+      platforms.push({ id: "house-upper-floor-left", type: "wood", x: upperFloorX, y: upperY, w: ladderGapX - upperFloorX, h: 26 });
+    }
+    const rightFloorX = ladderGapX + ladderGapW;
+    const rightFloorW = upperFloorX + upperFloorW - rightFloorX;
+    if (rightFloorW > 38) {
+      platforms.push({ id: "house-upper-floor-right", type: "wood", x: rightFloorX, y: upperY, w: rightFloorW, h: 26 });
+    }
     for (let i = 0; i < upstairsRooms; i += 1) {
       const roomX = 40 + i * roomW;
       structures.push({ id: `up-room-${i}`, type: "houseRoom", floor: "up", x: roomX, y: upperY - 190, w: roomW - 18, h: 190 });
