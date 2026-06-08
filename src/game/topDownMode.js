@@ -776,10 +776,16 @@ export function buildTopDownHouse(state, soundOn) {
     return null;
   }
 
+  const house = makePlayerHouse(state.frog.x + 92, state.frog.y - 6, 1);
+  const obstruction = getHousePlacementObstruction(state, house);
+  if (obstruction) {
+    setNotice(state, `That house spot is blocked by ${obstruction}. Move to a clearer spot.`, 3);
+    if (soundOn) beep(150, 0.04);
+    return null;
+  }
   state.score -= HOUSE_COST.flies;
   state.pearls -= HOUSE_COST.pearls;
   state.amber -= HOUSE_COST.amber;
-  const house = makePlayerHouse(state.frog.x + 92, state.frog.y - 6, 1);
   state.playerHouse = house;
   state.houseLevel = 1;
   setNotice(state, "House placed. Press E near it to edit inside in platformer mode.", 3.2);
@@ -2023,6 +2029,37 @@ function makePlayerHouse(x, y, level = 1) {
     level,
     fixed: true,
     talk: `Press E to enter your level ${level} house platformer.`,
+  };
+}
+
+function getHousePlacementObstruction(state, house) {
+  const footprint = centeredRect(house, 10);
+  if (
+    footprint.x < 20 ||
+    footprint.y < 20 ||
+    footprint.x + footprint.w > state.worldSize - 20 ||
+    footprint.y + footprint.h > state.worldSize - 20
+  ) {
+    return "the edge of the world";
+  }
+  if (state.active.roads.some((road) => rectsOverlap(footprint, road))) return "a road";
+  if (state.active.water.some((water) => rectsOverlap(footprint, water))) return "water";
+  if (state.active.walls.some((wall) => rectsOverlap(footprint, wall))) return "a wall";
+  if (state.active.lilyPads.some((pad) => rectsOverlap(footprint, { x: pad.x - 36, y: pad.y - 24, w: 72, h: 48 }))) return "a lily pad";
+  const structure = state.active.structures.find((item) => (
+    item.id !== house.id &&
+    rectsOverlap(footprint, centeredRect(item, 8))
+  ));
+  if (structure) return structureName(structure.type);
+  return null;
+}
+
+function centeredRect(item, padding = 0) {
+  return {
+    x: item.x - item.w / 2 - padding,
+    y: item.y - item.h / 2 - padding,
+    w: item.w + padding * 2,
+    h: item.h + padding * 2,
   };
 }
 
